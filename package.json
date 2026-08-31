@@ -1,0 +1,19 @@
+{
+  "name": "kitchen-merge",
+  "version": "1.0.0",
+  "description": "Kitchen Merge — service merge puzzle browser game",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "node test/rules.test.js",
+    "validate": "node test/validate-content.js",
+    "smoke": "node test/smoke.cjs",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "three": "^0.185.1"
+  }
+}

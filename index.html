@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Kitchen Merge — generate and merge ingredients into dishes that fulfill timed customer orders.">
+<title>Kitchen Merge</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23e8a04c'/><circle cx='16' cy='16' r='8' fill='%231d1512'/></svg>">
+<script type="importmap">{ "imports": { "three": "./lib/three.module.js" } }</script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ======================= TITLE ======================= -->
+  <section id="screen-title" class="screen" aria-labelledby="title-heading">
+    <div class="title-card">
+      <h1 id="title-heading">Kitchen Merge</h1>
+      <p class="tagline">Generate, merge, serve. A welcoming open kitchen.</p>
+      <div class="menu" role="menu">
+        <button id="btn-play" class="btn primary big" data-autofocus>Play</button>
+        <button id="btn-daily" class="btn">Daily Challenge <span id="daily-status" class="pill"></span></button>
+        <button id="btn-journey" class="btn">Journey <span id="journey-status" class="pill"></span></button>
+        <button id="btn-practice" class="btn">Practice</button>
+        <button id="btn-challenge" class="btn">Challenges</button>
+        <button id="btn-scores" class="btn">Scores</button>
+        <button id="btn-help" class="btn">How to Play</button>
+        <button id="btn-settings" class="btn">Settings</button>
+      </div>
+      <p id="profile-line" class="muted"></p>
+    </div>
+  </section>
+
+  <!-- ======================= MODE SETUP ======================= -->
+  <section id="screen-setup" class="screen hidden" aria-labelledby="setup-heading">
+    <div class="panel">
+      <h2 id="setup-heading">Mode Setup</h2>
+      <div id="setup-details" class="details"></div>
+      <div class="row">
+        <button id="btn-start" class="btn primary">Start</button>
+        <button class="btn back" data-back>Back</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= PLAY ======================= -->
+  <section id="screen-play" class="screen hidden" aria-label="Play">
+    <header id="hud" class="hud">
+      <div class="hud-group">
+        <h2 id="hud-objective" class="hud-title">Serve the orders</h2>
+        <div id="hud-timer" class="hud-timer" aria-label="Time remaining"></div>
+      </div>
+      <div class="hud-group hud-score">
+        <span id="hud-score">0</span>
+        <span id="hud-streak" class="pill hidden"></span>
+      </div>
+      <div class="hud-group">
+        <button id="btn-pause" class="btn small" aria-label="Pause">II</button>
+      </div>
+    </header>
+
+    <div class="play-layout">
+      <aside id="rail-left" class="rail" aria-label="Orders">
+        <h3 class="rail-title">Orders</h3>
+        <ul id="orders-list" class="orders"></ul>
+        <div id="hud-progress" class="muted"></div>
+      </aside>
+
+      <div id="playfield" class="playfield">
+        <canvas id="gl" aria-hidden="true"></canvas>
+        <div id="board-dom" class="board-dom" role="grid" aria-label="Kitchen board"></div>
+        <div id="gl-fallback" class="gl-fallback hidden" role="status">
+          3D view unavailable — the accessible board below is fully playable.
+        </div>
+      </div>
+
+      <aside id="rail-right" class="rail" aria-label="Actions">
+        <h3 class="rail-title">Actions</h3>
+        <div class="action-tray" id="action-tray">
+          <button id="btn-serve" class="btn primary" disabled>Serve</button>
+          <button id="btn-trash" class="btn" disabled>Discard</button>
+          <button id="btn-undo" class="btn" disabled>Undo</button>
+          <button id="btn-hint" class="btn">Hint</button>
+        </div>
+        <p id="action-explain" class="muted" role="status"></p>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ======================= PAUSE ======================= -->
+  <div id="overlay-pause" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-heading">
+    <div class="panel">
+      <h2 id="pause-heading">Paused</h2>
+      <div class="menu">
+        <button id="btn-resume" class="btn primary">Resume</button>
+        <button id="btn-pause-settings" class="btn">Settings</button>
+        <button id="btn-pause-help" class="btn">How to Play</button>
+        <button id="btn-leave" class="btn danger">Leave Round</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= RESULTS ======================= -->
+  <div id="overlay-results" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="results-heading">
+    <div class="panel wide">
+      <h2 id="results-heading">Round Complete</h2>
+      <p id="results-reason" class="muted"></p>
+      <dl id="results-breakdown" class="breakdown"></dl>
+      <p id="results-total" class="total"></p>
+      <p id="results-achievements" class="achievements"></p>
+      <p id="results-compare" class="muted"></p>
+      <div class="menu">
+        <button id="btn-retry" class="btn primary">Retry</button>
+        <button id="btn-next" class="btn hidden">Next Stage</button>
+        <button id="btn-results-title" class="btn">Back to Title</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= HELP ======================= -->
+  <section id="screen-help" class="screen hidden" aria-labelledby="help-heading">
+    <div class="panel wide">
+      <h2 id="help-heading">How to Play</h2>
+      <div class="help-cards">
+        <article class="card"><h3>Generate</h3><p>Tap a station (round base with a glowing item) to produce a tier-1 ingredient on a free cell.</p></article>
+        <article class="card"><h3>Merge</h3><p>Select an item, then select an identical item to merge them into the next tier. Chains run from tier 1 up to tier 5.</p></article>
+        <article class="card"><h3>Serve</h3><p>When a dish matches a customer order, select it and press Serve before the order expires. Quick consecutive serves build a streak bonus.</p></article>
+        <article class="card"><h3>Efficiency</h3><p>Empty board cells at round end add an efficiency bonus. Discard clutter with Discard.</p></article>
+        <article class="card"><h3>Controls</h3><p>Pointer or touch: tap to select, tap target to act. Keyboard: arrow keys move focus, Enter selects, S serves, D discards, U undoes (practice), H hints, Esc pauses, C resets the camera.</p></article>
+      </div>
+      <div class="row"><button class="btn back" data-back>Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= SETTINGS ======================= -->
+  <section id="screen-settings" class="screen hidden" aria-labelledby="settings-heading">
+    <div class="panel wide">
+      <h2 id="settings-heading">Settings</h2>
+      <div class="settings-grid">
+        <fieldset><legend>Audio</legend>
+          <label>Music <input type="range" id="set-music" min="0" max="1" step="0.05"></label>
+          <label>Effects <input type="range" id="set-effects" min="0" max="1" step="0.05"></label>
+          <label>Ambience <input type="range" id="set-ambience" min="0" max="1" step="0.05"></label>
+          <label>Voice cues <input type="range" id="set-voice" min="0" max="1" step="0.05"></label>
+        </fieldset>
+        <fieldset><legend>Graphics</legend>
+          <label>Quality tier
+            <select id="set-tier">
+              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+            </select></label>
+          <label>Theme <select id="set-theme"></select></label>
+        </fieldset>
+        <fieldset><legend>Accessibility</legend>
+          <label><input type="checkbox" id="set-reduced-motion"> Reduced motion</label>
+          <label><input type="checkbox" id="set-high-contrast"> High contrast</label>
+          <label><input type="checkbox" id="set-colorblind"> Color-vision palette</label>
+          <label><input type="checkbox" id="set-large-text"> Larger text</label>
+          <label><input type="checkbox" id="set-left-handed"> Left-handed controls</label>
+          <label><input type="checkbox" id="set-haptics"> Haptics</label>
+          <button id="btn-replay-tutorial" class="btn small">Replay tutorials</button>
+        </fieldset>
+      </div>
+      <div class="row"><button class="btn back" data-back>Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= SCORES ======================= -->
+  <section id="screen-scores" class="screen hidden" aria-labelledby="scores-heading">
+    <div class="panel wide">
+      <h2 id="scores-heading">Scores</h2>
+      <div class="row">
+        <button id="btn-scores-local" class="btn small primary">Local</button>
+        <button id="btn-scores-global" class="btn small">Global (daily)</button>
+      </div>
+      <div id="scores-list" class="scores"></div>
+      <div class="row"><button class="btn back" data-back>Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= LIST PICKER (journey/practice/challenge) ======================= -->
+  <section id="screen-list" class="screen hidden" aria-labelledby="list-heading">
+    <div class="panel wide">
+      <h2 id="list-heading">Select</h2>
+      <div id="list-items" class="list"></div>
+      <div class="row"><button class="btn back" data-back>Back</button></div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+  <div id="live-assertive" class="sr-only" aria-live="assertive"></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

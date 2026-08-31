@@ -1,0 +1,2 @@
+name=Kitchen Merge
+launch=index.html

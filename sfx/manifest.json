@@ -1,0 +1,74 @@
+[
+  {
+    "name": "ui-confirm",
+    "seconds": 1,
+    "prompt": "Short soft UI button click, a gentle wooden tap with a quick muted click, clean, dry, no reverb.",
+    "event": "ack"
+  },
+  {
+    "name": "item-select",
+    "seconds": 1,
+    "prompt": "Light pluck of a small metal utensil tapping the rim of a ceramic bowl, bright short tick, close mic.",
+    "event": "select"
+  },
+  {
+    "name": "ingredient-spawn",
+    "seconds": 1,
+    "prompt": "Soft pop of a fresh vegetable landing on a wooden cutting board, gentle organic thump with a slight bounce.",
+    "event": "spawn"
+  },
+  {
+    "name": "merge-pop",
+    "seconds": 1,
+    "prompt": "Juicy wet pop of two soft food items squishing together into one, followed by a brief tiny sparkle shimmer.",
+    "event": "merge"
+  },
+  {
+    "name": "action-denied",
+    "seconds": 1,
+    "prompt": "Short dull double knock on a wooden kitchen door, low and muted, a gentle refusal without harshness.",
+    "event": "invalid"
+  },
+  {
+    "name": "order-serve",
+    "seconds": 2,
+    "prompt": "Small brass restaurant service bell ding followed by a plate being set down softly on a counter, bright and satisfying.",
+    "event": "submit"
+  },
+  {
+    "name": "streak-bonus",
+    "seconds": 2,
+    "prompt": "Quick ascending cascade of three small glass chimes with a light kitchen clatter, cheerful and energetic.",
+    "event": "streak"
+  },
+  {
+    "name": "order-expire",
+    "seconds": 2,
+    "prompt": "Gentle descending airy sigh of steam escaping as a pot is lifted off the heat, soft and deflating.",
+    "event": "expire"
+  },
+  {
+    "name": "discard-item",
+    "seconds": 1,
+    "prompt": "Crinkling food wrapper dropped into a metal trash bin, ending with a soft hollow clang.",
+    "event": "trash"
+  },
+  {
+    "name": "round-win",
+    "seconds": 3,
+    "prompt": "Cheerful small restaurant kitchen celebration, happy service bell dings, plates chiming and a short rising sparkle flourish.",
+    "event": "win"
+  },
+  {
+    "name": "round-lose",
+    "seconds": 3,
+    "prompt": "Gentle disappointed descending phrase on a wooden marimba in a quiet kitchen, soft, warm and sympathetic.",
+    "event": "lose"
+  },
+  {
+    "name": "timer-tick",
+    "seconds": 1,
+    "prompt": "Single quiet mechanical kitchen timer tick, one short dry click, no ring.",
+    "event": "tick"
+  }
+]
