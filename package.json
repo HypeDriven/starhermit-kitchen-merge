@@ -5,9 +5,9 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "test": "node test/rules.test.js",
-    "validate": "node test/validate-content.js",
-    "smoke": "node test/smoke.cjs",
+    "test": "node tests/rules.test.js",
+    "validate": "node tests/validate-content.js",
+    "smoke": "node tests/smoke.cjs",
     "start": "node server.js"
   },
   "keywords": [],
