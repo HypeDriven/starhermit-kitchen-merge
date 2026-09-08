@@ -25,6 +25,19 @@ function spawnInto(state, lv, genIdx) {
   return applyCommand(state, lv, { id: 'c' + Math.random(), kind: 'spawn', gen: genIdx });
 }
 
+t('generators: one distinct station per family, even on narrow boards', () => {
+  const F4 = ['grain', 'garden', 'dairy', 'ember'];
+  for (const [cols, rows, fams] of [[6, 6, F4], [4, 5, F4], [6, 6, ['grain']], [6, 6, F4.slice(0, 2)]]) {
+    const lv = { id: 'g', version: 1, seed: 7, cols, rows, families: fams, openOrders: 0, timeLimit: 10 };
+    const s = createGame(lv);
+    const gens = [];
+    s.board.forEach((c, i) => { if (c && c.kind === 'gen') gens.push(i); });
+    eq(gens.length, fams.length, 'station count ' + cols + 'x' + rows + '/' + fams.length);
+    eq(new Set(gens).size, fams.length, 'stations must not overlap');
+    eq(new Set(gens.map((i) => s.board[i].family)).size, fams.length, 'every family gets a station');
+  }
+});
+
 t('createGame places generators and initial orders', () => {
   const s = createGame(level);
   const gens = s.board.filter((c) => c && c.kind === 'gen');

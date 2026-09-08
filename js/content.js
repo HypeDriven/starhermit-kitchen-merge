@@ -3,7 +3,7 @@
 // mechanics, par values, tutorial flags and presentation theme.
 import { FAMILY_KEYS, hashString } from './rules.js';
 
-export const CONTENT_VERSION = 1;
+export const CONTENT_VERSION = 2;
 
 // ------------------------------------------------------------ Themes ----
 export const THEMES = [
@@ -30,7 +30,7 @@ export const TUTORIALS = [
   },
   {
     id: 'learn-3', title: 'Lesson 3: Serve',
-    brief: 'A customer wants Dough. Merge two Sprouts into Dough, select it, then press Serve to fulfill the order before it expires.',
+    brief: 'A customer order is waiting (check its tier). Merge Sprouts into the ordered dish, select it, then press Serve to fulfill the order before it expires.',
     goal: { kind: 'submit', count: 1 },
     level: { families: ['grain'], openOrders: 1, ordersTarget: 1, timeLimit: null },
   },
@@ -154,6 +154,7 @@ export function validateLevel(level) {
   if (typeof level.seed !== 'number') errors.push('missing numeric seed');
   if (!Array.isArray(level.families) || level.families.length < 1) errors.push('no families');
   if (level.cols * level.rows < level.families.length + 2) errors.push('board too small for stations');
+  if (level.cols < level.families.length) errors.push('stations exceed board width');
   if (level.timeLimit == null && level.moveLimit == null && level.ordersTarget == null) {
     if (level.kind !== 'practice' && level.kind !== 'tutorial') errors.push('unbounded duration');
   }

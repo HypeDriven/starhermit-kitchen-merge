@@ -633,7 +633,7 @@ function openList(title, items) {
 function openJourney() {
   const p = store.getProgress();
   const items = JOURNEY_LEVELS.map((l) => {
-    const locked = l.stage > p.journeyStage + 1;
+    const locked = l.stage > Math.max(1, p.journeyStage);
     const stars = p.stars[l.stage] || 0;
     return {
       label: (l.mastery ? '★ ' : '') + l.name + (stars ? ' ' + '★'.repeat(stars) : ''),
@@ -677,33 +677,49 @@ async function openScores() {
   }
 }
 
+// Render a scores table without innerHTML: session ids come from other
+// players via the server and must never be interpreted as markup.
+function renderScoreTable(box, headers, rows) {
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const hr = document.createElement('tr');
+  for (const h of headers) { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); }
+  thead.appendChild(hr);
+  const tbody = document.createElement('tbody');
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    for (const v of row) { const td = document.createElement('td'); td.textContent = String(v); tr.appendChild(td); }
+    tbody.appendChild(tr);
+  }
+  table.append(thead, tbody);
+  box.appendChild(table);
+}
+
 function renderLocalScores() {
   const all = store.getScores();
   const box = $('scores-list');
   const ids = Object.keys(all).sort();
+  box.innerHTML = '';
   if (!ids.length) { box.innerHTML = '<p class="muted">No scores yet — play a round!</p>'; return; }
-  box.innerHTML = ids.map((id) => {
-    const best = all[id][0];
-    return '<table><thead><tr><th>' + id + '</th><th>Score</th><th>Served</th><th>When</th></tr></thead><tbody>' +
-      all[id].slice(0, 5).map((e) =>
-        '<tr><td>' + e.sessionId.slice(0, 6) + '</td><td>' + e.score + '</td><td>' + e.fulfilled + '</td><td>' + e.date.slice(0, 10) + '</td></tr>').join('') +
-      '</tbody></table>';
-  }).join('');
+  for (const id of ids) {
+    renderScoreTable(box, [id, 'Score', 'Served', 'When'],
+      all[id].slice(0, 5).map((e) => [String(e.sessionId).slice(0, 6), e.score, e.fulfilled, String(e.date).slice(0, 10)]));
+  }
 }
 
 function renderGlobalScores() {
   const box = $('scores-list');
   let scores = [];
   try { scores = JSON.parse(box.dataset.global || '[]'); } catch {}
+  box.innerHTML = '';
   if (!scores.length) { box.innerHTML = '<p class="muted">No global scores available (offline or empty board).</p>'; return; }
-  box.innerHTML = '<table><thead><tr><th>#</th><th>Session</th><th>Score</th><th>Validated</th></tr></thead><tbody>' +
-    scores.map((e, i) => '<tr><td>' + (i + 1) + '</td><td>' + String(e.sessionId).slice(0, 8) + '</td><td>' + e.score + '</td><td>' + (e.validated ? 'yes' : 'casual') + '</td></tr>').join('') +
-    '</tbody></table>';
+  renderScoreTable(box, ['#', 'Session', 'Score', 'Validated'],
+    scores.map((e, i) => [i + 1, String(e.sessionId).slice(0, 8), e.score, e.validated ? 'yes' : 'casual']));
 }
 
 // ---------------------------------------------------------- pause/help ----
 function openPause() {
-  if (!session) return;
+  if (!session || session.state.phase !== 'active') return;
   session.pause();
   lastFocus = document.activeElement;
   $('overlay-pause').classList.remove('hidden');
@@ -778,7 +794,7 @@ function bindPlayInput() {
       else if (inPlay && session) openPause();
       return;
     }
-    if (!inPlay || paused || !session) return;
+    if (!inPlay || paused || !session || session.state.phase !== 'active') return;
     switch (e.key.toLowerCase()) {
       case 's': $('btn-serve').click(); break;
       case 'd': $('btn-trash').click(); break;
@@ -826,8 +842,9 @@ function wire() {
     const p = store.getProgress();
     if (p.tutorialsDone.length < TUTORIALS.length) openLearn();
     else {
-      const stage = Math.min(p.journeyStage, 39);
-      openSetup(JOURNEY_LEVELS[stage === 0 && p.journeyStage === 0 ? 0 : stage], 'journey');
+      // journeyStage is the next stage to play (1-based); 0 means not started.
+      const idx = Math.max(0, Math.min(p.journeyStage, 40) - 1);
+      openSetup(JOURNEY_LEVELS[idx], 'journey');
     }
   });
   $('btn-daily').addEventListener('click', openDaily);

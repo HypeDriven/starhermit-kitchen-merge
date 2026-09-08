@@ -63,11 +63,12 @@ export function createGame(level, seedOverride) {
   const streams = makeStreams(seed);
   const cols = level.cols || 6, rows = level.rows || 6;
   const board = new Array(cols * rows).fill(null);
-  // Generators: one per enabled family, placed along the bottom row.
+  // Generators: one per enabled family, spread across the bottom row.
+  // Even spacing keeps columns distinct whenever cols >= families.
   const fams = level.families;
   fams.forEach((fam, i) => {
-    const idx = (rows - 1) * cols + Math.min(1 + i * 2, cols - 1);
-    board[idx] = { kind: 'gen', family: fam };
+    const col = Math.min(Math.floor(((i * 2 + 1) * cols) / (fams.length * 2)), cols - 1);
+    board[(rows - 1) * cols + col] = { kind: 'gen', family: fam };
   });
   const state = {
     version: RULES_VERSION,

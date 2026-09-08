@@ -13,7 +13,7 @@ import { replayEnvelope, compareResults, totalScore } from './js/rules.js';
 import { dailyLevel, CONTENT_VERSION } from './js/content.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT || 8080);
 const DATA_DIR = process.env.KM_DATA || path.join(__dirname, 'data');
 const SCORES_FILE = path.join(DATA_DIR, 'scores.json');
 
@@ -90,7 +90,9 @@ async function handleApi(req, res, url) {
     if (typeof claim.score !== 'number' || !Number.isInteger(claim.score) || claim.score < 0 || claim.score > 1e7) {
       return json(res, 400, { error: 'bad-score' });
     }
-    if (typeof claim.sessionId !== 'string' || claim.sessionId.length > 40) return json(res, 400, { error: 'bad-session' });
+    if (typeof claim.sessionId !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(claim.sessionId)) {
+      return json(res, 400, { error: 'bad-session' });
+    }
     if (claim.contentVersion !== CONTENT_VERSION) return json(res, 400, { error: 'stale-version' });
 
     const db = loadScores();
@@ -131,10 +133,14 @@ async function handleApi(req, res, url) {
 }
 
 function serveStatic(req, res, url) {
-  let p = decodeURIComponent(url.pathname);
+  let p;
+  try { p = decodeURIComponent(url.pathname); }
+  catch { res.writeHead(400); return res.end('bad request'); }
   if (p === '/') p = '/index.html';
+  // Never serve dotfiles or VCS/metadata directories (.git, .env, ...).
+  if (p.split('/').some((seg) => seg.startsWith('.'))) { res.writeHead(403); return res.end('forbidden'); }
   const file = path.normalize(path.join(__dirname, p));
-  if (!file.startsWith(__dirname)) { res.writeHead(403); return res.end('forbidden'); }
+  if (file !== __dirname && !file.startsWith(__dirname + path.sep)) { res.writeHead(403); return res.end('forbidden'); }
   // Keep secrets and data outside the served tree.
   if (file.startsWith(DATA_DIR)) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(file, (err, data) => {
@@ -155,5 +161,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log('Kitchen Merge server listening on http://localhost:' + PORT);
+  console.log('Kitchen Merge server listening on http://localhost:' + server.address().port);
 });

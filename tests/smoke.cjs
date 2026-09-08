@@ -58,7 +58,7 @@ const puppeteer = require('puppeteer-core');
   await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle0' });
   await new Promise((r) => setTimeout(r, 400));
   await page.evaluate(() => {
-    localStorage.setItem('kitchen-merge:progress', JSON.stringify({ journeyStage: 1, stars: {}, tutorialsDone: ['learn-1', 'learn-2', 'learn-3'], achievements: {}, playDays: [], masteryDone: 0 }));
+    localStorage.setItem('kitchen-merge:progress', JSON.stringify({ journeyStage: 2, stars: {}, tutorialsDone: ['learn-1', 'learn-2', 'learn-3'], achievements: {}, playDays: [], masteryDone: 0 }));
   });
   await page.reload({ waitUntil: 'networkidle0' });
   await new Promise((r) => setTimeout(r, 400));
