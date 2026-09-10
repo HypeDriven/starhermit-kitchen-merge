@@ -153,6 +153,7 @@ function bindSettings() {
 // ------------------------------------------------------------ selection ----
 let selectedCell = null;
 let hintCells = [];
+let warnedLowTime = false;
 
 function setSelected(i) {
   selectedCell = i;
@@ -320,7 +321,11 @@ function updateHud() {
   if (s.timeLeft != null) {
     const secs = Math.ceil(s.timeLeft * TICK_MS / 1000);
     timerEl.textContent = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
-    timerEl.classList.toggle('urgent', secs <= 15);
+    const urgent = secs <= 15;
+    timerEl.classList.toggle('urgent', urgent);
+    // One-shot audible warning the first time a timed round crosses 15 s.
+    if (urgent && !warnedLowTime) { warnedLowTime = true; audio.play('warn', s.tick); announce('Fifteen seconds left.', true); }
+    if (!urgent) warnedLowTime = false;
   } else if (s.movesLeft != null) {
     timerEl.textContent = s.movesLeft + ' moves';
     timerEl.classList.toggle('urgent', s.movesLeft <= 5);
@@ -375,7 +380,7 @@ function onGameEvent(e, state) {
       announce('An order expired.', true);
       break;
     case 'new-order':
-      audio.play('tick', seed);
+      audio.play('arrive', seed);
       announce('New order: ' + FAMILIES[e.order.family].tiers[e.order.tier - 1]);
       break;
     case 'end':
@@ -410,6 +415,7 @@ function startRound(level, mode) {
   }
   selectedCell = null;
   hintCells = [];
+  warnedLowTime = false;
   if (session) session.stop();
   session = new Session(level, {
     ranked: mode === 'daily',

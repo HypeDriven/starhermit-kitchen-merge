@@ -240,3 +240,28 @@ input[type="range"] { flex: 1; max-width: 140px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ---------------- Key art (assets/) ---------------- */
+/* Title backdrop: the generated diorama sits behind a dark scrim so menu text
+   keeps AA contrast. Purely decorative — the screen is fully usable if the
+   image fails to load, because --bg still paints underneath. */
+#screen-title {
+  background-image:
+    linear-gradient(to bottom, #17110de0, #17110df2),
+    url('../assets/title-keyart.webp');
+  background-size: cover;
+  background-position: center 62%;
+  background-repeat: no-repeat;
+}
+#screen-title .title-card { background: #241b14e6; backdrop-filter: blur(2px); }
+
+/* Results panel: the plated-dish illustration as a faint header wash. */
+#overlay-results .panel {
+  background-image:
+    linear-gradient(to bottom, #241b14cc 0%, #241b14 62%),
+    url('../assets/results-plating.webp');
+  background-size: cover;
+  background-position: center top;
+}
+body.high-contrast #screen-title,
+body.high-contrast #overlay-results .panel { background-image: none; }

@@ -70,5 +70,17 @@
     "seconds": 1,
     "prompt": "Single quiet mechanical kitchen timer tick, one short dry click, no ring.",
     "event": "tick"
+  },
+  {
+    "name": "order-arrive",
+    "seconds": 2,
+    "prompt": "A small paper order ticket clipped onto a metal rail in a restaurant kitchen, a light paper rustle and a soft bright two-note chime, clean and inviting.",
+    "event": "arrive"
+  },
+  {
+    "name": "time-warning",
+    "seconds": 2,
+    "prompt": "An urgent mechanical kitchen timer beginning to rattle, three quick dry ticks rising slightly in pitch with a faint metallic tension, tense but not harsh.",
+    "event": "warn"
   }
 ]

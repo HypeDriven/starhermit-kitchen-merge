@@ -20,6 +20,8 @@ const SFX_SAMPLES = {
   win: 'round-win',
   lose: 'round-lose',
   tick: 'timer-tick',
+  arrive: 'order-arrive',
+  warn: 'time-warning',
 };
 
 export class AudioEngine {
@@ -162,6 +164,14 @@ export class AudioEngine {
           setTimeout(() => this.blip({ freq: f, dur: 0.3, type: 'triangle', gain: 0.22, seed: seed + i }), i * 160));
         break;
       case 'tick': this.blip({ freq: 980, dur: 0.03, gain: 0.06, seed }); break;
+      case 'arrive':
+        this.blip({ freq: 700, dur: 0.09, type: 'triangle', gain: 0.2, seed });
+        setTimeout(() => this.blip({ freq: 930, dur: 0.13, type: 'triangle', gain: 0.2, seed: seed + 1 }), 70);
+        break;
+      case 'warn':
+        [0, 110, 220].forEach((d, i) =>
+          setTimeout(() => this.blip({ freq: 820 + i * 70, dur: 0.05, type: 'square', gain: 0.12, seed: seed + i }), d));
+        break;
     }
   }
 
