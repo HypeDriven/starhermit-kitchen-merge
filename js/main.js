@@ -8,19 +8,81 @@ import {
 } from './content.js';
 import { KitchenRenderer } from './render.js';
 import { AudioEngine } from './audio.js';
-import { Session, store } from './session.js';
+import { Session, store, lsSet } from './session.js';
+import { zipStore, unzipFirstEntry, bytesToBase64 } from './zip.js';
 
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------- platform ----
 // Token-aware same-origin API adapter with graceful offline fallback.
+// Hosted mode activates iff a launch token was read from the URL fragment.
+
+// Launch token: `#game_token=<jwt>` (optional `&session_id=`), read once and
+// stripped. Query-param fallbacks exist for local dev only.
+function readLaunchToken() {
+  let token = null;
+  if (window.location.hash.length > 1) {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    token = params.get('game_token');
+    if (token) {
+      params.delete('game_token');
+      const rest = params.toString();
+      history.replaceState(null, '', window.location.pathname + window.location.search + (rest ? '#' + rest : ''));
+    }
+  }
+  if (!token) {
+    const q = new URLSearchParams(window.location.search);
+    token = q.get('game_token') || q.get('token') || q.get('launch') || q.get('launch_token');
+  }
+  return token;
+}
+
+// JWT payload decode (no verify): sub = user id, game_scope = this game's slug.
+function decodeLaunchToken(token) {
+  try {
+    const payload = token.split('.')[1];
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)));
+    return { sub: json.sub, slug: json.game_scope };
+  } catch { return {}; }
+}
+
+const launchToken = readLaunchToken();
+const claims = launchToken ? decodeLaunchToken(launchToken) : {};
+
+const SYNC_LABELS = {
+  synced: 'Cloud save: synced',
+  saving: 'Cloud save: saving…',
+  error: 'Cloud save unreachable — progress is safe on this device',
+};
+
 const platform = {
   timeOffset: 0, // server - client, ms
   online: false,
+  token: launchToken,
+  sub: claims.sub || null,
+  slug: claims.slug || null,
+  hosted: !!(launchToken && claims.sub && claims.slug),
+  nickname: null,
+  syncState: 'offline', // offline | saving | synced | error
+  _pushTimer: null,
+  _pushing: false,
+  _adopting: false,
+  _lastSig: null,
+  _profileCache: new Map(),
+
+  authHeaders() {
+    return this.token ? { Authorization: 'Bearer ' + this.token } : {};
+  },
+  setSync(state) {
+    this.syncState = state;
+    if (typeof refreshTitle === 'function') refreshTitle();
+  },
+
   async fetchTime() {
     try {
       const t0 = Date.now();
-      const res = await fetch('/api/v1/time');
+      const res = await fetch('/api/v1/time', { headers: this.authHeaders() });
       const t1 = Date.now();
       if (!res.ok) return;
       const data = await res.json();
@@ -33,7 +95,7 @@ const platform = {
   todayIso() { return new Date(this.now()).toISOString().slice(0, 10); },
   async post(path, body) {
     const res = await fetch(path, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...this.authHeaders() }, body: JSON.stringify(body),
     });
     if (res.status === 429) throw new Error('rate-limited');
     const data = await res.json().catch(() => ({}));
@@ -41,13 +103,153 @@ const platform = {
     return data;
   },
   async get(path) {
-    const res = await fetch(path);
+    const res = await fetch(path, { headers: this.authHeaders() });
     if (res.status === 429) throw new Error('rate-limited');
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'request-failed');
     return data;
   },
+
+  // Nickname from the user profile; NEVER /api/v1/me, never usernames.
+  async fetchNickname(userId) {
+    if (this._profileCache.has(userId)) return this._profileCache.get(userId);
+    let name = 'Player ' + String(userId).slice(0, 8);
+    try {
+      const data = await this.get('/api/v1/users/' + userId + '/profile');
+      if (data && typeof data.nickname === 'string' && data.nickname) name = data.nickname;
+    } catch { /* keep fallback */ }
+    this._profileCache.set(userId, name);
+    return name;
+  },
+  async fetchProfile() {
+    this.nickname = await this.fetchNickname(this.sub);
+    refreshTitle();
+  },
+
+  // Token lifetime is 60 min; re-mint scoped tokens every 45 min, retry ~60 s.
+  async refreshToken() {
+    clearTimeout(this._refreshTimer);
+    if (!this.hosted) return;
+    try {
+      const data = await this.post('/api/v1/games/' + this.slug + '/launch-token', {});
+      if (data && typeof data.token === 'string' && data.token) this.token = data.token;
+      this._refreshTimer = setTimeout(() => this.refreshToken(), 45 * 60 * 1000);
+    } catch {
+      this._refreshTimer = setTimeout(() => this.refreshToken(), 60 * 1000);
+    }
+  },
+
+  // ------------------------------------------------------- cloud save ----
+  // ONE slot, zip+base64. localStorage stays the offline cache; cloud is a
+  // mirror. Remote wins on load conflict.
+  buildSaveDoc() {
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      settings: store.getSettings(),
+      progress: store.getProgress(),
+      scores: store.getScores(),
+    };
+  },
+  saveSignature(doc) {
+    return JSON.stringify(doc.settings) + JSON.stringify(doc.progress) + JSON.stringify(doc.scores);
+  },
+  scheduleCloudPush() {
+    if (!this.hosted || this._adopting) return;
+    clearTimeout(this._pushTimer);
+    this.setSync('saving');
+    this._pushTimer = setTimeout(() => this.flushCloud(), 2000);
+  },
+  async flushCloud() {
+    if (!this.hosted || this._pushing) return;
+    clearTimeout(this._pushTimer);
+    const doc = this.buildSaveDoc();
+    const sig = this.saveSignature(doc);
+    if (sig === this._lastSig && this.syncState === 'synced') return;
+    this._pushing = true;
+    try {
+      const bytes = zipStore('save.json', new TextEncoder().encode(JSON.stringify(doc)));
+      const res = await fetch('/api/v1/me/cloud-saves/' + this.slug, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...this.authHeaders() },
+        body: JSON.stringify({ dataBase64: bytesToBase64(bytes) }),
+        keepalive: true,
+      });
+      if (!res.ok) throw new Error('cloud-save-failed');
+      this._lastSig = sig;
+      this.setSync('synced');
+    } catch {
+      this.setSync('error');
+    } finally {
+      this._pushing = false;
+    }
+  },
+  async loadCloud() {
+    if (!this.hosted) return;
+    try {
+      const res = await fetch('/api/v1/me/cloud-saves/' + this.slug, { headers: this.authHeaders() });
+      if (res.status === 404) { // no remote save yet: push the local doc
+        this._lastSig = null;
+        await this.flushCloud();
+        return;
+      }
+      if (!res.ok) throw new Error('cloud-load-failed');
+      const doc = JSON.parse(new TextDecoder().decode(unzipFirstEntry(new Uint8Array(await res.arrayBuffer()))));
+      if (!doc || typeof doc !== 'object' || !doc.progress || typeof doc.progress !== 'object') throw new Error('bad-cloud-doc');
+      this.adoptRemote(doc);
+      this.setSync('synced');
+    } catch {
+      this.setSync('error');
+    }
+  },
+  adoptRemote(doc) {
+    this._adopting = true;
+    try {
+      lsSet('progress', doc.progress);
+      if (doc.scores && typeof doc.scores === 'object') lsSet('scores', doc.scores);
+      if (doc.settings && typeof doc.settings === 'object') {
+        lsSet('settings', doc.settings);
+        Object.assign(settings, doc.settings); // live settings object tracks remote
+        applySettings();
+      }
+      this._lastSig = this.saveSignature(this.buildSaveDoc());
+    } finally {
+      this._adopting = false;
+    }
+    refreshTitle();
+  },
+
+  // Read-only platform leaderboard; null when none exists or unreachable.
+  async fetchLeaderboard(pageSize = 50) {
+    if (!this.hosted) return null;
+    try {
+      const game = await this.get('/api/v1/games/' + this.slug);
+      if (!game || !game.leaderboardId) return null;
+      const data = await this.get('/api/v1/leaderboards/' + game.leaderboardId +
+        '/entries?friendsOnly=&page=1&pageSize=' + pageSize);
+      const entries = data.entries || data.items || [];
+      const rows = [];
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        const id = e.userId || e.user_id || null;
+        rows.push({
+          rank: e.rank != null ? e.rank : i + 1,
+          name: id ? await this.fetchNickname(id) : 'Player',
+          score: e.score,
+          validated: null,
+        });
+      }
+      return rows;
+    } catch { return null; }
+  },
 };
+
+// Every local persist schedules a debounced cloud push: localStorage first,
+// cloud as mirror.
+for (const m of ['saveSettings', 'saveProgress', 'saveScore']) {
+  const orig = store[m].bind(store);
+  store[m] = (...args) => { const r = orig(...args); platform.scheduleCloudPush(); return r; };
+}
 
 // -------------------------------------------------------------- settings ----
 const settings = store.getSettings();
@@ -585,8 +787,13 @@ function refreshTitle() {
   const p = store.getProgress();
   $('journey-status').textContent = p.journeyStage > 0 ? 'Stage ' + Math.min(p.journeyStage, 40) + '/40' : '';
   $('daily-status').textContent = '';
-  $('profile-line').textContent = 'Guest profile — progress is stored on this device.' +
-    (platform.online ? ' Connected to server.' : ' Offline mode.');
+  if (platform.hosted) {
+    $('profile-line').textContent = 'Playing as ' + (platform.nickname || '…') + ' — ' +
+      (SYNC_LABELS[platform.syncState] || 'Signed in.');
+  } else {
+    $('profile-line').textContent = 'Guest profile — progress is stored on this device.' +
+      (platform.online ? ' Connected to server.' : ' Offline mode.');
+  }
 }
 
 function openSetup(level, mode) {
@@ -675,10 +882,18 @@ async function openDaily() {
 async function openScores() {
   renderLocalScores();
   show('scores');
-  if (platform.online) {
+  // Hosted: the platform leaderboard is read-only per the wiki.
+  if (platform.hosted) {
+    const rows = await platform.fetchLeaderboard();
+    if (rows) { $('scores-list').dataset.global = JSON.stringify(rows); return; }
+  }
+  // Its-backend (server.js) daily board, shared clock; graceful when absent.
+  if (platform.online || !platform.hosted) {
     try {
       const data = await platform.get('/api/v1/scores?day=' + platform.todayIso());
-      $('scores-list').dataset.global = JSON.stringify(data.scores || []);
+      $('scores-list').dataset.global = JSON.stringify((data.scores || []).map((e, i) => ({
+        rank: i + 1, name: String(e.sessionId).slice(0, 8), score: e.score, validated: e.validated ? 'yes' : 'casual',
+      })));
     } catch { /* offline */ }
   }
 }
@@ -719,8 +934,8 @@ function renderGlobalScores() {
   try { scores = JSON.parse(box.dataset.global || '[]'); } catch {}
   box.innerHTML = '';
   if (!scores.length) { box.innerHTML = '<p class="muted">No global scores available (offline or empty board).</p>'; return; }
-  renderScoreTable(box, ['#', 'Session', 'Score', 'Validated'],
-    scores.map((e, i) => [i + 1, String(e.sessionId).slice(0, 8), e.score, e.validated ? 'yes' : 'casual']));
+  renderScoreTable(box, ['#', 'Player', 'Score', 'Validated'],
+    scores.map((e) => [e.rank, e.name, e.score, e.validated == null ? '—' : e.validated]));
 }
 
 // ---------------------------------------------------------- pause/help ----
@@ -949,6 +1164,15 @@ async function boot() {
   bindPlayInput();
   applySettings();
   platform.fetchTime().then(refreshTitle);
+
+  // Hosted (launch token present): identity, cloud save mirror, token refresh.
+  if (platform.hosted) {
+    platform.fetchProfile();
+    platform.loadCloud();
+    platform.refreshToken();
+    window.addEventListener('pagehide', () => platform.flushCloud());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) platform.flushCloud(); });
+  }
 
   try {
     renderer = new KitchenRenderer($('gl'), {

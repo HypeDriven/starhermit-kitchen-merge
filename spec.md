@@ -434,21 +434,31 @@ matches on `family` and `tier`, never on a display name.
 
 **Used:**
 - **Server script** — `server.js` hosts the static build and the game API.
+- **Launch token** — hosted mode activates when `#game_token=<jwt>` is present in the
+  URL fragment (read once, then stripped via `history.replaceState`; query-param
+  fallbacks for local dev only). The payload's `sub`/`game_scope` identify the player
+  and the game slug; every REST call sends `Authorization: Bearer`, and the token is
+  re-minted every 45 min via `POST /api/v1/games/{slug}/launch-token`.
+- **Identity** — `GET /api/v1/users/{sub}/profile` supplies the account nickname shown
+  on the title line ("Player "+id8 fallback); never `/api/v1/me`, never usernames.
+- **Cloud save** — settings/progress/scores zip+base64 to the one-slot
+  `GET/PUT /api/v1/me/cloud-saves/{slug}` mirror (stored-zip helper in `js/zip.js`),
+  remote-preferred on load, 2 s debounce + pagehide flush, sync status on the title
+  line; localStorage stays the offline cache.
 - **Authoritative time** — `GET /api/v1/time`; the client measures a round-trip-adjusted
   offset and derives the daily date from it, so the Daily seed is the same for everyone.
-- **Daily leaderboard** — `GET /api/v1/scores?day=` and `POST /api/v1/scores`. Submissions
-  carry the replay envelope; the server re-derives the level from the day (never trusting a
-  client seed), replays the log, and marks the entry `validated` only if the replayed score
-  matches. Unvalidated entries are kept on a casual board rather than dropped. Per-IP token
-  bucket: 30 requests/minute → 429; bodies over 512 KB → 413; entries are idempotent by
-  session id and the top 100 per day are retained.
+- **Daily leaderboard** — its-backend `GET /api/v1/scores?day=` and `POST /api/v1/scores`
+  (Bearer-authenticated), replay-validated by `server.js`; on-platform or offline they
+  fail gracefully to local records. Hosted global reads use the platform leaderboard
+  (`GET /api/v1/games/{slug}` → read-only entries, nicknames resolved via the profile
+  helper). Clients never submit to platform leaderboards.
 - **Sessions** — a per-round `sessionId` identifies leaderboard rows.
 
-**Not used:** platform identity/accounts (players are a local "Guest profile"), presence,
-matchmaking, real-time multiplayer, cloud saves, platform achievements (the five
-achievements are local), and any commerce. The whole game runs offline: `platform.fetchTime`
-failing simply sets `online = false`, the title line reads "Offline mode", the Daily falls
-back to the device date, and results say "Offline — score saved locally only."
+**Not used:** presence, matchmaking, real-time multiplayer, platform achievements (the
+five achievements are local flags inside the cloud-saved progress doc), and any
+commerce. The whole game still runs offline: `platform.fetchTime` failing simply sets
+`online = false`, the title line reads "Offline mode", the Daily falls back to the
+device date, and results say "Offline — score saved locally only."
 
 ---
 
@@ -467,7 +477,9 @@ deterministic fields only — `_streams`, selection and undo stack are excluded.
 
 **Persistence.** `localStorage` under `kitchen-merge:` — `settings`, `progress`, `scores`
 (top 20 per board id), and snapshot slots. Every access is wrapped so private-mode failures
-degrade to defaults instead of throwing.
+degrade to defaults instead of throwing. When a launch token is present the same document is
+mirrored to the platform cloud-save slot (remote wins on load); localStorage remains the
+offline cache.
 
 **Performance budgets.** Quality tiers cap device pixel ratio at 1 / 1.5 / 2, toggle shadows
 and surround detail, and size the particle pool at 60 / 150 / 300. Geometry and materials are
