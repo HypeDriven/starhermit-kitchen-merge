@@ -43,9 +43,10 @@ body {
   position: absolute; inset: 0;
   padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right))
            calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: safe center; justify-content: center;
   overflow-y: auto;
 }
+.screen > * { flex-shrink: 0; }
 
 h1 { font-size: 2.6rem; margin: 0 0 4px; color: var(--accent); letter-spacing: 0.02em; }
 h2 { margin: 0 0 12px; }
@@ -176,9 +177,11 @@ body.left-handed .play-layout > * { direction: ltr; }
 /* ---------------- Overlays ---------------- */
 .overlay {
   position: fixed; inset: 0; z-index: 20;
-  background: #000a; display: flex; align-items: center; justify-content: center;
+  background: #000a; display: flex; align-items: safe center; justify-content: center;
   padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  overflow-y: auto;
 }
+.overlay > * { flex-shrink: 0; max-height: calc(100vh - 16px); overflow-y: auto; box-sizing: border-box; }
 .breakdown { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 12px 0; }
 .breakdown dt { color: var(--muted); }
 .breakdown dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
@@ -231,10 +234,13 @@ input[type="range"] { flex: 1; max-width: 140px; }
 
 /* ---------------- Landscape mobile: narrow status rail ---------------- */
 @media (max-height: 500px) and (orientation: landscape) {
-  .play-layout { grid-template-columns: minmax(120px, 170px) 1fr minmax(120px, 170px); grid-template-rows: 1fr; }
-  .rail { flex-direction: column; flex-wrap: nowrap; }
+  .play-layout { grid-template-columns: minmax(120px, 170px) 1fr minmax(130px, 180px); grid-template-rows: 1fr; }
+  .rail { flex-direction: column; flex-wrap: nowrap; overflow-y: auto; }
   .btn { min-height: 44px; }
-  .rail .btn { margin: 0 0 8px; }
+  .rail .btn { margin: 0 0 6px; }
+  /* one action per row: labels never collide */
+  .action-tray { flex-direction: column; flex-wrap: nowrap; }
+  .action-tray .btn { width: 100%; flex: 0 0 auto; font-size: 0.9rem; padding: 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 
 @media (prefers-reduced-motion: reduce) {

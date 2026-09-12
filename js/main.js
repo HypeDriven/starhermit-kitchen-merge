@@ -397,6 +397,8 @@ function fitBoard() {
   board.style.height = cell * rows + 'px';
   board.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cell + 'px)';
   board.style.gridTemplateRows = 'repeat(' + rows + ', ' + cell + 'px)';
+  // the 3D props follow the DOM grid's pixel box (see render.fitToDom)
+  if (renderer && renderer.fitToDom) requestAnimationFrame(() => renderer.fitToDom(board.getBoundingClientRect().width));
 }
 
 function buildBoardDom(state) {

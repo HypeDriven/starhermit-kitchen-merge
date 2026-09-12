@@ -374,9 +374,28 @@ export class KitchenRenderer {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.dpr));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    // Keep the square board fully visible in portrait.
-    this.camera.position.set(0, w < h ? 13.4 : 10.8, w < h ? 2.4 : 3.0);
-    this.camera.lookAt(0, 0, 0.2);
+    this.camera.updateProjectionMatrix();
+    this._alignCamera();
+  }
+
+  /**
+   * The DOM board (the clickable, labelled grid) is the authoritative layout.
+   * The 3D board is viewed straight down and scaled so its projected footprint
+   * matches the DOM board's pixel box exactly, so props sit on the cells the
+   * player taps at every aspect ratio.
+   */
+  fitToDom(sizePx) { this._domSize = sizePx; this._alignCamera(); }
+  _alignCamera() {
+    const w = this.canvas.clientWidth || 1, h = this.canvas.clientHeight || 1;
+    const cols = this.cols || 6;
+    const worldHalfW = (cols * 1.05) / 2;
+    const tanV = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+    const size = this._domSize || Math.min(w, h) - 24;
+    // px = x * h / (2 * dist * tanV)  →  dist so that worldHalfW → size / 2
+    const dist = worldHalfW * h / (size * tanV);
+    this.camera.up.set(0, 0, -1);
+    this.camera.position.set(0, dist, 0);
+    this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();
   }
 
