@@ -143,12 +143,12 @@ async function runPass(browser, pass, viewport, hasTouch) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() !== 'error') return;
+    if (m.type() !== 'error' && m.type() !== 'warning') return;
     if (browserNoise.test(m.text())) return;
     // The game probes the platform API on boot and falls back to its
     // supported offline mode; our static server 404s those probes.
     if (/Failed to load resource/.test(m.text()) && (m.location()?.url || '').includes('/api/')) return;
-    errors.push(`console: ${m.text()}`);
+    errors.push(`console ${m.type()}: ${m.text()}`);
   });
 
   const step = async (name, fn) => {
@@ -165,7 +165,66 @@ async function runPass(browser, pass, viewport, hasTouch) {
     await page.screenshot({ path: SHOT('title', pass) });
   });
 
+  await step('graphics: preset Low → High, override, persists across reload', async () => {
+    const preset = () => page.evaluate(() => document.body.dataset.gfxPreset);
+    await page.click('#btn-settings');
+    await page.waitForSelector(visible('#screen-settings'));
+    if ((await preset()) !== 'low') throw new Error('Auto on a software GPU should resolve to low, got ' + (await preset()));
+    await page.selectOption('#set-tier', 'low');
+    if ((await preset()) !== 'low') throw new Error('Low not applied');
+    await page.selectOption('#set-tier', 'high');
+    await page.waitForFunction(() => document.body.dataset.gfxPreset === 'high');
+    await page.waitForFunction(() => /2048² shadows/.test(document.getElementById('gfx-summary').textContent));
+    await page.selectOption('#gfx-bloom', 'off');
+    await page.waitForFunction(() => !/bloom/.test(document.getElementById('gfx-summary').textContent.split(' · ').slice(1).join(' ')));
+    const box = await page.locator('#gfx-section').boundingBox();
+    const vw = page.viewportSize().width;
+    if (!box || box.x < 0 || box.x + box.width > vw + 1) throw new Error('Graphics section overflows the viewport: ' + JSON.stringify(box));
+    await page.locator('#gfx-section').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: SHOT('graphics', pass) });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector(visible('#screen-title'));
+    if ((await preset()) !== 'high') throw new Error('preset did not survive reload');
+    await page.click('#btn-settings');
+    await page.waitForSelector(visible('#screen-settings'));
+    if ((await page.inputValue('#set-tier')) !== 'high') throw new Error('quality select not restored');
+    if ((await page.inputValue('#gfx-bloom')) !== 'off') throw new Error('bloom override not restored');
+    // Choosing a preset clears overrides.
+    await page.selectOption('#set-tier', 'auto');
+    await page.waitForFunction(() => document.body.dataset.gfxPreset === 'low');
+    if ((await page.inputValue('#gfx-bloom')) !== 'preset') throw new Error('preset change did not clear the override');
+    await page.click('#screen-settings [data-back]');
+    await page.waitForSelector(visible('#screen-title'));
+  });
+
   if (pass === 'desktop') {
+    await step('graphics: Ultra renders a round with the full post chain, then back to Auto', async () => {
+      await page.click('#btn-settings');
+      await page.selectOption('#set-tier', 'ultra');
+      await page.check('#gfx-fps');
+      await page.click('#screen-settings [data-back]');
+      await page.click('#btn-practice');
+      await page.locator('#list-items .btn', { hasText: 'Relaxed' }).click();
+      await page.click('#btn-start');
+      await page.waitForSelector(visible('#screen-play'));
+      const b = await boardInfo(page);
+      await page.click(cell(b.gens[0]));
+      await page.waitForTimeout(2500);
+      if (!(await page.locator('#fps-meter').isVisible())) throw new Error('frame-rate readout not shown');
+      await page.screenshot({ path: SHOT('ultra', pass) });
+      await page.keyboard.press('Escape');
+      await page.click('#btn-pause-settings');
+      await page.waitForSelector(visible('#screen-settings'));
+      if (await page.locator('#gfx-post-note').isVisible()) throw new Error('post-processing failed to build at Ultra');
+      await page.uncheck('#gfx-fps');
+      await page.selectOption('#set-tier', 'auto');
+      await page.click('#screen-settings [data-back]');
+      await page.keyboard.press('Escape');
+      await page.waitForSelector(visible('#overlay-pause'));
+      await page.click('#btn-leave');
+      await page.waitForSelector(visible('#screen-title'));
+    });
+
     await step('settings open → toggle → close', async () => {
       await page.click('#btn-settings');
       await page.waitForSelector(visible('#screen-settings'));

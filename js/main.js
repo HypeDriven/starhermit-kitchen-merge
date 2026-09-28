@@ -7,6 +7,7 @@ import {
   dailyLevel, practiceLevel,
 } from './content.js';
 import { KitchenRenderer } from './render.js';
+import { initGraphicsPanel } from './gfx-ui.js';
 import { AudioEngine } from './audio.js';
 import { Session, store, lsSet } from './session.js';
 import { zipStore, unzipFirstEntry, bytesToBase64 } from './zip.js';
@@ -211,6 +212,7 @@ const platform = {
         lsSet('settings', doc.settings);
         Object.assign(settings, doc.settings); // live settings object tracks remote
         applySettings();
+        if (gfxPanel) gfxPanel.render();
       }
       this._lastSig = this.saveSignature(this.buildSaveDoc());
     } finally {
@@ -305,8 +307,9 @@ function applySettings() {
   document.body.classList.toggle('left-handed', settings.leftHanded);
   document.body.classList.toggle('cb-palette', settings.colorblind);
   for (const bus of ['music', 'effects', 'ambience', 'voice']) audio.setVolume(bus, settings[bus]);
-  if (renderer) {
-    renderer.setQuality(settings.tier);
+  if (!settings.graphics || typeof settings.graphics !== 'object') settings.graphics = {};
+  if (renderer && renderer.ok) {
+    renderer.setGraphics(settings.graphics);
     renderer.setReducedMotion(settings.reducedMotion);
     renderer.setColorblind(settings.colorblind);
     renderer.setTheme(currentLevel ? currentLevel.theme : settings.theme);
@@ -314,7 +317,14 @@ function applySettings() {
   store.saveSettings(settings);
 }
 
+let gfxPanel = null;
 function bindSettings() {
+  gfxPanel = initGraphicsPanel({
+    root: $('gfx-section'),
+    getSaved: () => settings.graphics || {},
+    save: (g) => { settings.graphics = g; applySettings(); },
+    getRenderer: () => renderer,
+  });
   const map = [
     ['set-music', 'music'], ['set-effects', 'effects'], ['set-ambience', 'ambience'], ['set-voice', 'voice'],
   ];
@@ -323,8 +333,6 @@ function bindSettings() {
     el.value = settings[key];
     el.addEventListener('input', () => { settings[key] = parseFloat(el.value); applySettings(); });
   }
-  $('set-tier').value = settings.tier;
-  $('set-tier').addEventListener('change', (e) => { settings.tier = e.target.value; applySettings(); });
   const themeSel = $('set-theme');
   for (const t of THEMES) {
     const o = document.createElement('option');
@@ -1178,7 +1186,7 @@ async function boot() {
 
   try {
     renderer = new KitchenRenderer($('gl'), {
-      tier: settings.tier,
+      graphics: settings.graphics,
       reducedMotion: settings.reducedMotion,
       colorblind: settings.colorblind,
     });
@@ -1186,6 +1194,7 @@ async function boot() {
   } catch {
     $('gl-fallback').classList.remove('hidden');
   }
+  gfxPanel.render();
 
   // Render loop.
   let last = performance.now();

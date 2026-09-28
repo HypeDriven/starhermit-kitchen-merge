@@ -7,7 +7,7 @@
 <meta name="description" content="Kitchen Merge — generate and merge ingredients into dishes that fulfill timed customer orders.">
 <title>Kitchen Merge</title>
 <link rel="stylesheet" href="css/style.css">
-<script type="importmap">{ "imports": { "three": "./lib/three.module.js" } }</script>
+<script type="importmap">{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }</script>
 </head>
 <body>
 <div id="app">
@@ -143,12 +143,9 @@
           <label>Ambience <input type="range" id="set-ambience" min="0" max="1" step="0.05"></label>
           <label>Voice cues <input type="range" id="set-voice" min="0" max="1" step="0.05"></label>
         </fieldset>
-        <fieldset><legend>Graphics</legend>
-          <label>Quality tier
-            <select id="set-tier">
-              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
-            </select></label>
+        <fieldset id="gfx-section" class="gfx-section"><legend>Graphics</legend>
           <label>Theme <select id="set-theme"></select></label>
+          <div id="gfx-controls"></div>
         </fieldset>
         <fieldset><legend>Accessibility</legend>
           <label><input type="checkbox" id="set-reduced-motion"> Reduced motion</label>

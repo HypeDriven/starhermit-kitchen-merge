@@ -131,7 +131,7 @@ export const store = {
   getSettings() {
     return {
       music: 0.6, effects: 0.8, ambience: 0.4, voice: 0.8,
-      tier: 'high', reducedMotion: false, highContrast: false, colorblind: false,
+      graphics: {}, reducedMotion: false, highContrast: false, colorblind: false,
       largeText: false, leftHanded: false, holdToConfirm: false, haptics: true,
       theme: 'hearth',
       ...lsGet('settings', {}),

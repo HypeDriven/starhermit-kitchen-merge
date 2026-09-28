@@ -5,7 +5,7 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "test": "node tests/rules.test.js",
+    "test": "node tests/rules.test.js && node --test tests/gfx.test.js",
     "validate": "node tests/validate-content.js",
     "smoke": "node tests/run-smoke.mjs",
     "test:e2e": "node tests/e2e.mjs",

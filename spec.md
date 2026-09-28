@@ -29,14 +29,17 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | `js/rules.js` | Pure rules engine — RNG, families, board, legal actions, `applyCommand`, `advance`, scoring, replay envelope. No DOM. |
 | `js/content.js` | Versioned content: themes, 3 tutorials, 40 Journey stages, daily generator, practice difficulties, 4 challenges, achievements, validators. |
 | `js/session.js` | Round controller: tick loop, undo stack, replay recording, `localStorage` persistence (`store`). |
-| `js/render.js` | `KitchenRenderer` — Three.js scene, family silhouettes, quality tiers, particle pool, camera shake. |
+| `js/render.js` | `KitchenRenderer` — Three.js scene, family silhouettes, procedural textures, lighting and shadows, post-processing chain, adaptive resolution, particle pool, ambient motion, camera shake. |
+| `js/gfx.js` | Pure graphics quality model: presets, categories, GPU detection (`detectPreset`), `resolve`, `presetTier`, `applyPreset`, `describe`. |
+| `js/gfx-ui.js` | Settings → Graphics controls and their strings in nine locales (`pickLocale`). |
 | `js/audio.js` | `AudioEngine` — four gain buses, authored Opus clips with synthesised fallbacks, seeded arpeggio music, noise ambience. |
 | `js/main.js` | Bootstrap, screen navigation, input (pointer/keyboard/gamepad), HUD, results, achievements, platform API adapter. |
 | `server.js` | StarHermit authoritative script: static host + `/api/v1/time` and `/api/v1/scores` with replay validation. |
 | `lib/three.module.js`, `lib/three.core.js` | Vendored Three.js r185, loaded through an import map. |
+| `lib/addons/` | Three.js r185 addons (`three/addons/` in the import map): EffectComposer, RenderPass, ShaderPass, OutputPass, GTAOPass, UnrealBloomPass, SMAAPass, FXAAShader, RoomEnvironment, RoundedBoxGeometry and the shaders/math they import. |
 | `assets/` | Generated key art (`title-keyart.webp`, `results-plating.webp`). |
 | `sfx/` | 14 Opus clips + `manifest.txt` (canonical), `manifest.md`, `manifest.json` (generator input). |
-| `tests/` | `rules.test.js` (16 assertions, `npm test`), `validate-content.js`, `e2e.mjs` (real-UI playthrough), `smoke.cjs`/`run-smoke.mjs`. |
+| `tests/` | `rules.test.js` (16 assertions) and `gfx.test.js` (graphics model + locale coverage) via `npm test`, `validate-content.js`, `e2e.mjs` (real-UI playthrough), `smoke.cjs`/`run-smoke.mjs`. |
 | `coverart.png`, `icon.png`, `favicon.svg` | Platform art. |
 
 ---
@@ -321,7 +324,8 @@ icosahedron, cylinder, cone — one per family, so silhouette alone identifies a
 grayscale. Tier reads three ways: dimensions grow with tier, tiers 3+ gain a gold marker
 ring, tiers 4+ gain emissive glow, and the DOM cell always shows the dish name and a `T#`
 badge. The scene surround is deliberately sparse — counter, shelf, three hanging pans, a
-warm window plane — and the extra props only exist at medium/high quality.
+warm window plane, a copper rail and a salt cellar — and the extra props only exist with
+detailed scene detail.
 
 **The hero** is the board: the camera is a 30° lens at `(0, 10.8, 3.0)` looking at the
 board centre, near enough to top-down that the DOM grid overlays the projected 3D cells.
@@ -331,10 +335,43 @@ tabular-lining numerals for timer and score so digits do not jitter; a "Larger t
 class for players who need it.
 
 **Motion.** Short and event-tiered: 6 particles on spawn, 14 on merge, 20 on serve, all
-drawn from a bounded pool (60/150/300 by quality tier); camera shake 0.05 on merge, 0.08 on
+drawn from a bounded pool (60 or 300 by the Particles setting); camera shake 0.05 on merge, 0.08 on
 serve, decaying at 0.85 per frame. **Reduced motion** disables shake in `render()` and every
-CSS animation and transition via `@media (prefers-reduced-motion: reduce)`; nothing is
-communicated by motion alone.
+CSS animation and transition via `@media (prefers-reduced-motion: reduce)`; either also
+stops the ambient motion below; nothing is communicated by motion alone.
+
+**Graphics.** The board is lit by a warm key directional light with PCF shadows whose
+frustum is fitted to the board, a hemisphere fill, and (with reflections on) a
+`RoomEnvironment` studio map through `PMREMGenerator` as `scene.environment`; output is sRGB
+with ACES filmic tone mapping. With detailed scene detail, tiles are rounded glazed ceramic
+(`MeshPhysicalMaterial` with clearcoat and a procedural speckle texture) on a darker grout
+slab, the counter and station bases use a procedural butcher-block wood texture with bump,
+and items and station tops are clearcoated clay (plain detail keeps the flat standard
+materials). Optional effects: GTAO contact shadows (motes and sparks are excluded from its
+depth pass), bloom limited to highlights (threshold 0.9: station tops, the selection and
+target rings, sparks, the window glow), a colour grade (gentle S-curve, saturation, warm
+highlights / cool shadows) with vignette, FXAA/SMAA/MSAA anti-aliasing, and ambient motion —
+items breathe, station tops bob, the key light flickers like a hearth, dust motes drift, and
+the title card gets a slow lamp-glow. Detailed scene detail also gives menu panels and
+buttons a lit bevel and the title a warm glow (not in high contrast). The 3D view is not
+drawn while the play screen is hidden. **Settings → Graphics** offers Quality (Auto, chosen
+from the WebGL unmasked renderer: software renderers get Low, discrete GPUs and Apple M get
+High, others Balanced, and touch/mobile devices are capped at Balanced; Low; Balanced; High;
+Ultra), a render scale slider (50–200% of the preset's), one select per category defaulting
+to "From preset (…)" — Shadows (off/1024²/2048²/4096²), Ambient occlusion (off/on/high),
+Bloom, Colour grade, Anti-aliasing (off/FXAA/SMAA/MSAA), Reflections, Scene detail
+(plain/detailed), Particles (low/high), Ambient motion (static/animated) — plus Adaptive
+resolution (on by default: averages 90 frames, steps the resolution down 0.1 to 60% above
+26 ms and back up 0.05 below 14 ms) and Show frame rate (a readout at the bottom-left that
+never takes input). A summary line reads "GPU · cost summary · W×H px", and a note appears
+if post-processing cannot be built, in which case the game renders without it. Pixel ratio
+is min(device ratio, preset cap 1/1.5/2/2) × preset scale (Ultra 1.25) × render scale ×
+adaptive scale. Choosing a preset clears the overrides; changes apply immediately and are
+saved as `settings.graphics` (`kitchen-merge:settings`, mirrored to the cloud save). The
+composer runs only when a post effect is on, so Low renders directly with canvas MSAA. The
+body carries `data-gfx-preset` with the resolved preset. The panel's strings exist in
+en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT, chosen by `?lang=` or
+`navigator.languages`.
 
 **Visual assets the design calls for.** A title backdrop that shows all four families as a
 single lamp-lit diorama (so the fantasy lands before any text is read), and a results wash
@@ -421,7 +458,7 @@ matches on `family` and `tier`, never on a display name.
 - **Target sizes**: 44 px minimum on every button, and `fitBoard` refuses to draw a grid
   cell smaller than 44 px — the mobile e2e pass asserts this.
 - **Other switches**: larger text, left-handed layout (RTL flip of the play grid only),
-  haptics on/off, and a quality tier for low-power devices.
+  haptics on/off, and graphics quality presets (Low for low-power devices).
 - The 3D view is optional: if WebGL fails, `#gl-fallback` announces "3D view unavailable —
   the accessible board below is fully playable", and it is.
 
@@ -481,8 +518,9 @@ degrade to defaults instead of throwing. When a launch token is present the same
 mirrored to the platform cloud-save slot (remote wins on load); localStorage remains the
 offline cache.
 
-**Performance budgets.** Quality tiers cap device pixel ratio at 1 / 1.5 / 2, toggle shadows
-and surround detail, and size the particle pool at 60 / 150 / 300. Geometry and materials are
+**Performance budgets.** Graphics presets cap device pixel ratio at 1 / 1.5 / 2 / 2, toggle
+shadows, post effects, reflections and surround detail, and size the particle pool at 60 or
+300; adaptive resolution trims the pixel ratio when frames run long (§8 Graphics). Geometry and materials are
 disposed when items change tier or the board is rebuilt; item and station views are keyed by
 `family:tier` so unchanged cells are never re-created. The simulation is a 100 ms interval
 independent of the render loop, so a slow frame cannot alter the outcome.
@@ -501,7 +539,11 @@ calls into the modules.
 
 ## 14. Testing and acceptance criteria
 
-**`npm test` → `tests/rules.test.js`, 16 checks, all passing:** station placement on 6×6 and
+**`npm test` → `tests/rules.test.js` then `node --test tests/gfx.test.js`.** The graphics
+tests cover `detectPreset` on sample GPU strings and the mobile cap, `resolve` with
+Auto/explicit presets, per-category overrides, invalid tiers and render-scale clamping,
+`applyPreset` clearing overrides, `describe`, and that every panel string exists in all nine
+locales. **Rules, 16 checks, all passing:** station placement on 6×6 and
 4×5 boards; initial orders; spawn legality and effect; illegal spawn reason and
 `invalidActions` counting; merge family/tier constraints; submit scoring and streak;
 `orders-complete` terminal with efficiency; `time-up` via `advance` and order expiry;
@@ -515,12 +557,15 @@ Journey stages, a daily, 4 challenges) all pass `validateLevel` — ids and nume
 known families, board large enough for its stations, bounded duration, order tier in range.
 
 **`npm run test:e2e` → `tests/e2e.mjs`:** two passes — desktop 1280×800 and mobile 390×844
-with touch — covering title, settings toggle applying to `<body>`, the three lessons
+with touch — covering title, the Graphics section in both passes (Auto resolves to Low on the
+software GPU, Low then High applied to `data-gfx-preset` and the summary, a Bloom override,
+both surviving a reload, Auto clearing the override, the section fitting the viewport), on
+desktop an Ultra round with the full post chain and the frame-rate readout, settings toggle applying to `<body>`, the three lessons
 (asserting a tier-2 Dough actually appears after the merge), the 40-stage Journey list with
 39 locked, stage 1 played to "All orders served!", persisted progression, pause via button
 and Esc, pause→settings, leave, a Practice round with hint and undo, the local scores table,
 and a full touch playthrough with a 44 px minimum cell assertion. Any page error or
-non-benign console message fails the run.
+non-benign console error or warning fails the run.
 
 **QA bar (per `agents/qa.md`), as checkable statements:**
 - Every feature the UI exposes is operable in the browser at both viewports. ✔ e2e

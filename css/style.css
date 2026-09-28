@@ -138,6 +138,7 @@ h3 { margin: 0 0 6px; }
   cursor: pointer; opacity: 0.92;
 }
 .board-dom .cell .glyph { font-size: 1.15rem; }
+.board-dom .cell { text-shadow: 0 1px 2px #000, 0 0 4px #000c; }
 .board-dom .cell[data-kind="item"] { background: #00000070; }
 .board-dom .cell[data-kind="gen"] { background: #ffffff14; border-style: dashed; }
 .board-dom .cell.selected { outline: 3px solid var(--focus); outline-offset: -1px; }
@@ -259,7 +260,7 @@ input[type="range"] { flex: 1; max-width: 140px; }
   background-position: center 62%;
   background-repeat: no-repeat;
 }
-#screen-title .title-card { background: #241b14e6; backdrop-filter: blur(2px); }
+#screen-title .title-card { background: #241b14e6; backdrop-filter: blur(2px); position: relative; }
 
 /* Results panel: the plated-dish illustration as a faint header wash. */
 #overlay-results .panel {
@@ -271,3 +272,42 @@ input[type="range"] { flex: 1; max-width: 140px; }
 }
 body.high-contrast #screen-title,
 body.high-contrast #overlay-results .panel { background-image: none; }
+
+/* ---------------- Graphics settings ---------------- */
+.settings-grid .gfx-section { grid-column: 1 / -1; min-width: 0; }
+.gfx-cats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); column-gap: 18px; }
+.gfx-section select { max-width: 62%; min-height: 36px; font: inherit; font-size: 0.9rem; }
+fieldset .gfx-cats label.gfx-stack { flex-direction: column; align-items: stretch; gap: 4px; margin: 6px 0; }
+.gfx-cats label.gfx-stack select { max-width: 100%; width: 100%; }
+.gfx-section .gfx-row > span:first-child { min-width: 0; }
+.gfx-slider-wrap { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; white-space: nowrap; }
+.gfx-slider-wrap input[type="range"] { min-width: 80px; }
+.gfx-value { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
+fieldset label.gfx-check { justify-content: flex-start; min-height: 32px; }
+.gfx-summary { font-size: 0.85rem; margin: 10px 0 0; overflow-wrap: anywhere; }
+.gfx-note { font-size: 0.85rem; margin: 6px 0 0; color: var(--danger); }
+#fps-meter {
+  position: fixed; left: calc(8px + var(--safe-left)); bottom: calc(8px + var(--safe-bottom)); z-index: 40;
+  pointer-events: none; font: 12px/1.2 ui-monospace, monospace; color: var(--text);
+  background: #000a; padding: 3px 6px; border-radius: 6px;
+}
+#fps-meter[hidden] { display: none; }
+
+/* Detailed scene: warmer, lit menu panels (DOM counterpart of the 3D detail). */
+body.gfx-detailed .title-card, body.gfx-detailed .panel {
+  background-image: linear-gradient(to bottom, #ffffff0d, #ffffff00 40%);
+  box-shadow: 0 10px 40px #0009, inset 0 1px 0 #ffffff1a;
+}
+body.gfx-detailed #screen-title .title-card { background-color: #241b14e6; }
+body.gfx-detailed h1 { text-shadow: 0 0 18px #e8a04c55, 0 2px 0 #00000080; }
+body.gfx-detailed .btn { box-shadow: inset 0 1px 0 #ffffff14, 0 2px 6px #0005; }
+body.gfx-detailed .btn.primary { background-image: linear-gradient(to bottom, #ffffff26, #ffffff00); }
+/* Animated ambience: a slow lamp-glow drift behind the title card. */
+body.gfx-animated #screen-title::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(40% 35% at 50% 40%, #e8a04c22, transparent 70%);
+  animation: km-glow 7s ease-in-out infinite alternate;
+}
+@keyframes km-glow { from { opacity: 0.55; transform: translateY(-1.5%); } to { opacity: 1; transform: translateY(1.5%); } }
+body.high-contrast #screen-title::before { display: none; }
+body.high-contrast h1 { text-shadow: none; }
