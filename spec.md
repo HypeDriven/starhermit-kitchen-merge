@@ -630,3 +630,7 @@ No character animation is needed: the game has no humanoid.
    the design wants a round interrupted by a closed tab to be resumable from the title.
 4. **Player-scoped daily identity.** Once platform identity is available, leaderboard rows
    should key on the player rather than a per-round session id.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
