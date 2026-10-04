@@ -27,8 +27,10 @@
         <button id="btn-scores" class="btn">Scores</button>
         <button id="btn-help" class="btn">How to Play</button>
         <button id="btn-settings" class="btn">Settings</button>
+        <button id="btn-invite" class="btn hidden" type="button">Invite a friend</button>
+        <button id="btn-signin" class="btn hidden" type="button">Sign in with StarHermit</button>
       </div>
-      <p id="profile-line" class="muted"></p>
+      <p class="profile-row"><img id="profile-avatar" class="avatar hidden" alt=""><span id="profile-line" class="muted"></span></p>
     </div>
   </section>
 
@@ -127,7 +129,7 @@
         <article class="card"><h3>Merge</h3><p>Select an item, then select an identical item to merge them into the next tier. Chains run from tier 1 up to tier 5.</p></article>
         <article class="card"><h3>Serve</h3><p>When a dish matches a customer order, select it and press Serve before the order expires. Quick consecutive serves build a streak bonus.</p></article>
         <article class="card"><h3>Efficiency</h3><p>Empty board cells at round end add an efficiency bonus. Discard clutter with Discard.</p></article>
-        <article class="card"><h3>Controls</h3><p>Pointer or touch: tap to select, tap target to act. Keyboard: arrow keys move focus, Enter selects, S serves, D discards, U undoes (practice), H hints, Esc pauses, C resets the camera.</p></article>
+        <article class="card"><h3>Controls</h3><p id="help-controls">Pointer or touch: tap to select, tap target to act. Keyboard: arrow keys move focus, Enter selects, S serves, D discards, U undoes (practice), H hints, Esc pauses, C resets the camera.</p></article>
       </div>
       <div class="row"><button class="btn back" data-back>Back</button></div>
     </div>
@@ -188,6 +190,7 @@
   <div id="live" class="sr-only" aria-live="polite"></div>
   <div id="live-assertive" class="sr-only" aria-live="assertive"></div>
 </div>
+<script src="js/starhermit-sdk.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
