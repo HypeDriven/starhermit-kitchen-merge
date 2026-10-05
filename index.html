@@ -8,6 +8,7 @@
 <title>Kitchen Merge</title>
 <link rel="stylesheet" href="css/style.css">
 <script type="importmap">{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }</script>
+<script src="ui-scale.js"></script>
 <script src="browser-guard.js"></script>
 </head>
 <body>
@@ -141,7 +142,7 @@
       <h2 id="settings-heading">Settings</h2>
       <div class="settings-grid">
         <fieldset><legend>Audio</legend>
-          <label>Music <input type="range" id="set-music" min="0" max="1" step="0.05"></label>
+          <label>Music <input type="range" id="set-music" data-autofocus min="0" max="1" step="0.05"></label>
           <label>Effects <input type="range" id="set-effects" min="0" max="1" step="0.05"></label>
           <label>Ambience <input type="range" id="set-ambience" min="0" max="1" step="0.05"></label>
           <label>Voice cues <input type="range" id="set-voice" min="0" max="1" step="0.05"></label>

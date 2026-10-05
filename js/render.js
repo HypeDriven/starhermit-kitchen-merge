@@ -840,7 +840,8 @@ export class KitchenRenderer {
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (!w || !h) return; // play screen hidden (menus): nothing to draw
     const rescale = this._adapt(dt * 1000);
-    const dpr = Math.min(window.devicePixelRatio || 1, this.q.dprCap);
+    // the canvas sits in the zoomed #app (ui-scale.js): scale its backing store too
+    const dpr = Math.min(window.devicePixelRatio || 1, this.q.dprCap) * ((window.UIScale && window.UIScale.value) || 1);
     const ratio = Math.min(3, dpr * this.q.scale * this.adaptiveScale);
     if (w !== this.size[0] || h !== this.size[1] || ratio !== this.pixelRatio || rescale) {
       this.size = [w, h];

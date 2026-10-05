@@ -286,7 +286,7 @@ boot ─► title ─┬─► setup ─► play ─┬─► [pause overlay] �
 ```
 
 `show(name)` toggles the seven `.screen` sections, focuses the first `[data-autofocus]` or
-`.btn`, and pauses/resumes the session. Pause and results are `role="dialog"`
+`.btn` (Settings autofocuses its first slider, so it opens at the top), and pauses/resumes the session. Pause and results are `role="dialog"`
 `aria-modal="true"` overlays layered above the play screen; pause restores the previously
 focused element on close, results focuses Retry.
 
@@ -301,6 +301,16 @@ chips; the board keeps a 44 px minimum cell (`fitBoard` clamps `Math.max(44, …
 
 **Landscape phone (≤500 px tall).** Back to three columns with 120–170 px rails, so the
 board keeps the full height between HUD and bottom edge.
+
+**Large screens.** `ui-scale.js` sets `--ui-scale` (1 up to a 1600×1000 viewport, then
+`min(w/1600, h/1000)` capped at 2.5) and `#app` (every screen, the play grid with its canvas,
+the overlays and toast) plus the fps meter are CSS-`zoom`ed by it, with the stylesheet's vw/vh
+lengths divided by it, so 3840×2160 shows the ~1778×1000 layout magnified. The renderer multiplies
+its pixel ratio by `UIScale.value`, and `fitBoard` hands `fitToDom` the board width in layout px.
+
+**Toast placement.** The toast sits at the bottom centre; in the stacked portrait play layout it
+rises above the action row. During play, if it would cover a hinted cell or a station, it moves
+to the top edge of the playfield instead.
 
 **Safe areas.** `env(safe-area-inset-*)` feeds four custom properties consumed by every
 screen's padding, the HUD, the overlays and the toast, and `viewport-fit=cover` is set.

@@ -118,8 +118,28 @@ function toast(msg, ms = 2600) {
   const el = $('toast');
   el.textContent = msg;
   el.classList.remove('hidden');
+  el.style.top = el.style.bottom = '';
+  requestAnimationFrame(() => placeToast(el));
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.add('hidden'), ms);
+}
+
+// During play the toast sits at the bottom of the screen, over the board's bottom rows. When it
+// would cover a hinted cell or a station (what hints and tutorial briefs point at), move it to the
+// top edge of the playfield instead. Rects are visual px; style.top is layout px inside the zoomed
+// #app, hence the division by the UI scale.
+function placeToast(el) {
+  el.style.top = el.style.bottom = '';
+  if ($('screen-play').classList.contains('hidden') || el.classList.contains('hidden')) return;
+  const overlaps = (r) => [...document.querySelectorAll('#board-dom .cell.hint, #board-dom .cell[data-kind="gen"]')]
+    .some((c) => { const b = c.getBoundingClientRect(); return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top; });
+  const r = el.getBoundingClientRect();
+  if (!overlaps(r)) return;
+  const field = $('playfield').getBoundingClientRect();
+  const top = field.top + 8;
+  if (overlaps({ left: r.left, right: r.right, top, bottom: top + r.height })) return;
+  el.style.top = (top / ((window.UIScale && window.UIScale.value) || 1)) + 'px';
+  el.style.bottom = 'auto';
 }
 
 function announce(msg, assertive = false) {
@@ -233,8 +253,9 @@ function fitBoard() {
   board.style.height = cell * rows + 'px';
   board.style.gridTemplateColumns = 'repeat(' + cols + ', ' + cell + 'px)';
   board.style.gridTemplateRows = 'repeat(' + rows + ', ' + cell + 'px)';
-  // the 3D props follow the DOM grid's pixel box (see render.fitToDom)
-  if (renderer && renderer.fitToDom) requestAnimationFrame(() => renderer.fitToDom(board.getBoundingClientRect().width));
+  // the 3D props follow the DOM grid's pixel box (see render.fitToDom); the rect is
+  // in zoomed (visual) px on large screens, the canvas size in layout px
+  if (renderer && renderer.fitToDom) requestAnimationFrame(() => renderer.fitToDom(board.getBoundingClientRect().width / ((window.UIScale && window.UIScale.value) || 1)));
 }
 
 function buildBoardDom(state) {
