@@ -107,7 +107,11 @@ let helpReturn = 'title';
 function show(name) {
   for (const s of SCREENS) $('screen-' + s).classList.toggle('hidden', s !== name);
   const first = document.querySelector('#screen-' + name + ' [data-autofocus], #screen-' + name + ' .btn');
-  if (first) first.focus();
+  // preventScroll + reset: a low first button must not scroll the heading
+  // away; every screen opens at its top.
+  if (first) first.focus({ preventScroll: true });
+  const scr = $('screen-' + name);
+  for (const n of [scr, ...scr.querySelectorAll('*')]) if (n.scrollTop) n.scrollTop = 0;
   if (session && session.state.phase === 'active') {
     if (name !== 'play') session.pause();
     else if ($('overlay-pause').classList.contains('hidden')) session.resume();
@@ -576,7 +580,8 @@ function showResults(result) {
   markPlayDay();
   $('overlay-results').classList.remove('hidden');
   announce('Round over. Total score ' + result.score + '.', true);
-  $('btn-retry').focus();
+  $('btn-retry').focus({ preventScroll: true });
+  for (const n of [$('overlay-results'), ...$('overlay-results').querySelectorAll('*')]) if (n.scrollTop) n.scrollTop = 0;
 }
 
 function evaluateAchievements(result) {
@@ -769,7 +774,7 @@ function openPause() {
   session.pause();
   lastFocus = document.activeElement;
   $('overlay-pause').classList.remove('hidden');
-  $('btn-resume').focus();
+  $('btn-resume').focus({ preventScroll: true });
   announce('Paused.');
 }
 

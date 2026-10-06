@@ -286,7 +286,7 @@ boot ─► title ─┬─► setup ─► play ─┬─► [pause overlay] �
 ```
 
 `show(name)` toggles the seven `.screen` sections, focuses the first `[data-autofocus]` or
-`.btn` (Settings autofocuses its first slider, so it opens at the top), and pauses/resumes the session. Pause and results are `role="dialog"`
+`.btn` without scrolling and resets the screen's scroll, so every screen (and the results dialog) opens at its top, and pauses/resumes the session. Pause and results are `role="dialog"`
 `aria-modal="true"` overlays layered above the play screen; pause restores the previously
 focused element on close, results focuses Retry.
 
