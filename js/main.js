@@ -586,12 +586,29 @@ function showResults(result) {
   });
 
   $('results-compare').textContent = '';
+  postToLeaderboard(result.score);
 
   markPlayDay();
   $('overlay-results').classList.remove('hidden');
   announce('Round over. Total score ' + result.score + '.', true);
   $('btn-retry').focus({ preventScroll: true });
   for (const n of [$('overlay-results'), ...$('overlay-results').querySelectorAll('*')]) if (n.scrollTop) n.scrollTop = 0;
+}
+
+// Hosted play only: post a finished journey, daily or challenge round (not
+// practice or lessons) to the platform high-score board and show the rank.
+let lbRound = 0;
+function postToLeaderboard(total) {
+  const line = $('results-lb');
+  const round = ++lbRound;
+  line.classList.add('hidden');
+  if (!platform.hosted || !['journey', 'daily', 'challenge'].includes(currentMode)) return;
+  line.textContent = SH_TEXT.lbPosting;
+  line.classList.remove('hidden');
+  platform.submitScore(total).then((r) => {
+    if (round !== lbRound) return;
+    line.textContent = !r.posted ? SH_TEXT.lbFailed : r.rank ? SH_TEXT.lbRank.replace('{rank}', r.rank) : SH_TEXT.lbPosted;
+  });
 }
 
 function evaluateAchievements(result) {

@@ -14,7 +14,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | | |
 |---|---|
 | Genre | Single-player merge/service puzzle with real-time order timers |
-| Players | 1, plus asynchronous daily leaderboard comparison |
+| Players | 1, plus asynchronous leaderboard comparison (local records; the StarHermit `high-score` board when signed in) |
 | Session length | 90 s (a Challenge) to ~5 min (Daily); Journey stages run 3–4.5 min |
 | Platforms | Desktop and mobile browsers, portrait and landscape |
 | Rendering | Three.js diorama on `<canvas id="gl">` (decorative, `aria-hidden`) over a real DOM grid of `<button>` cells that is the single interaction and accessibility surface |
@@ -36,7 +36,8 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | `js/main.js` | Bootstrap, screen navigation, input (pointer/keyboard/gamepad), HUD, results, achievements, account UI. |
 | `js/platform.js` | `createPlatform()` — StarHermit adapter over the SDK (profile/avatar, cloud save, settings KV, bindings, invite, read-only board, sign-in) plus the time/score routes. |
 | `js/starhermit-sdk.js` | Shared StarHermit client (`window.StarHermit`), an unmodified copy of `tools/starhermit-sdk.js`, loaded before `main.js`. |
-| `server.js` | StarHermit authoritative script: static host + `/api/v1/time` and `/api/v1/scores` with replay validation. |
+| `score-script.js` | StarHermit platform script (`server=`): range-checks a finished round's score and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). |
+| `server.js` | Local dev server: static host + `/api/v1/time` and `/api/v1/scores` with replay validation. |
 | `lib/three.module.js`, `lib/three.core.js` | Vendored Three.js r185, loaded through an import map. |
 | `lib/addons/` | Three.js r185 addons (`three/addons/` in the import map): EffectComposer, RenderPass, ShaderPass, OutputPass, GTAOPass, UnrealBloomPass, SMAAPass, FXAAShader, RoomEnvironment, RoundedBoxGeometry and the shaders/math they import. |
 | `assets/` | Generated key art (`title-keyart.webp`, `results-plating.webp`). |
@@ -478,7 +479,7 @@ matches on `family` and `tier`, never on a display name.
 
 ## 12. StarHermit integration
 
-`starhermit.txt` declares `name`, `launch=index.html`, `owner`, `server=server.js`,
+`starhermit.txt` declares `name`, `launch=index.html`, `owner`, `server=score-script.js`,
 `cover=coverart.png`, per https://wiki.starhermit.com/ conventions, and six keyboard actions:
 `control.serve=KeyS`, `discard=KeyD`, `undo=KeyU`, `hint=KeyH`, `camera=KeyC`,
 `pause=Escape`. Arrow keys, Enter and Esc on a focused cell are roving-focus navigation and stay
@@ -507,19 +508,22 @@ fixed.
 - **Authoritative time** — signed in only, `GET /api/v1/time`; the client measures a
   round-trip-adjusted offset and derives the daily date from it. Standalone uses the device clock.
 - **Leaderboards** — local records on this device; hosted global reads use the first platform
-  leaderboard (`StarHermit.leaderboard()`, nicknames via the profile route). The client submits
-  no scores anywhere.
+  leaderboard (`StarHermit.leaderboard()`, nicknames via the profile route). When signed in, every
+  finished journey, daily or challenge round (not practice or lessons) posts its score through
+  `StarHermit.submitScores` — a practice session whose `score-script.js` posts it to the
+  `high-score` board (integer, higher is better, 0–100,000) — and the results overlay shows
+  "Leaderboard rank: #N" (or "Score posted…" / "Score not posted…").
 - **Sessions** — a per-round `sessionId` identifies leaderboard rows.
 
-Account strings (sign-in, invite, toasts) are localized in the nine locales (`shStrings()` in
+Account strings (sign-in, invite, toasts, leaderboard line) are localized in the nine locales (`shStrings()` in
 `js/gfx-ui.js`).
 
-**Not used:** `server.js` is the game's own static host + score API, not a platform game script,
-so platform sessions, matchmaking, session invites, chat, replays and platform achievements
+**Not used:** `score-script.js` only accepts leaderboard results and `server.js` is the local
+static host + score API, so platform multiplayer sessions, matchmaking, session invites, chat, replays and platform achievements
 (the five achievements are local flags inside the cloud-saved progress doc) have nothing to
 drive them; no realtime, voice or commerce. Standalone (no launch token) the client makes no
 request to any `/api` or `/ws` route: device clock, local scores, no submission. `server.js`
-still implements `/api/v1/scores` (replay validation) but the client no longer calls it.
+(local dev only) still implements `/api/v1/scores` (replay validation) but the client no longer calls it.
 
 ---
 
