@@ -15,6 +15,7 @@ export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
     avatar: null, // object URL of the account avatar
     syncState: 'offline', // offline | saving | synced | error
     _adopting: false,
+    _cloudReady: false, // set once loadCloud() has compared the slot
     _lastSig: null,
 
     get token() { return this.hosted ? this.sh.token : null; },
@@ -90,8 +91,10 @@ export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
     saveSignature(doc) {
       return JSON.stringify(doc.settings) + JSON.stringify(doc.progress) + JSON.stringify(doc.scores);
     },
+    // Pushes wait for loadCloud(): a saveJSON() queued at boot (applySettings)
+    // would stay pending in the SDK and overwrite a newer cloud doc ~2 s later.
     scheduleCloudPush() {
-      if (!this.hosted || this._adopting) return;
+      if (!this.hosted || this._adopting || !this._cloudReady) return;
       const doc = this.buildSaveDoc();
       const sig = this.saveSignature(doc);
       if (sig === this._lastSig) return;
@@ -106,6 +109,7 @@ export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
     async loadCloud() {
       if (!this.hosted) return;
       const doc = await this.sh.loadJSON();
+      this._cloudReady = true;
       if (!doc) { // no remote save yet: push the local doc
         this._lastSig = null;
         this.scheduleCloudPush();

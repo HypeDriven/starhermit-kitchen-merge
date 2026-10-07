@@ -496,7 +496,7 @@ fixed.
 - **Identity** — the profile nickname ("Player " + id fallback; never `/api/v1/me`, never
   usernames) and avatar on the title line.
 - **Cloud save** — settings/progress/scores in the slot `game:<slug>`, remote-preferred on load
-  (an empty slot receives the local doc), ~2 s debounce + keepalive flush on `pagehide`/hidden,
+  (an empty slot receives the local doc; no local write is pushed before that load), ~2 s debounce + keepalive flush on `pagehide`/hidden,
   sync status on the title line; localStorage stays the offline cache.
 - **Settings KV** — every settings save is mirrored with `patchSettings` (600 ms debounce); at
   boot the platform values are applied over the local ones.
