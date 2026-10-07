@@ -293,23 +293,33 @@ function updateBoardDom() {
     el.classList.toggle('selected', i === selectedCell);
     el.classList.toggle('hint', hintCells.includes(i));
     el.classList.remove('match');
+    // This runs every sim tick. Only rebuild a cell's content when what it
+    // shows changes: replacing the node under a pressed pointer makes
+    // Firefox drop the click, so taps on the board were randomly lost.
+    const key = !c ? 'empty' : c.kind + ':' + c.family + ':' + (c.kind === 'gen' ? '' : c.tier);
+    const fresh = el.dataset.view !== key;
+    el.dataset.view = key;
     if (!c) {
-      el.dataset.kind = 'empty'; delete el.dataset.family;
-      el.innerHTML = '';
-      el.setAttribute('aria-label', 'Empty cell ' + (i + 1));
+      if (fresh) {
+        el.dataset.kind = 'empty'; delete el.dataset.family;
+        el.innerHTML = '';
+        el.setAttribute('aria-label', 'Empty cell ' + (i + 1));
+      }
       continue;
     }
-    el.dataset.kind = c.kind;
-    el.dataset.family = c.family;
     const glyph = GLYPHS[c.family];
-    if (c.kind === 'gen') {
-      el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + FAMILY_NAMES[c.family] + ' station</span>';
-      el.setAttribute('aria-label', FAMILY_NAMES[c.family] + ' station, cell ' + (i + 1) + '. Activate to generate.');
-    } else {
-      el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + FAMILIES[c.family].tiers[c.tier - 1] + '</span><span class="tier">T' + c.tier + '</span>';
-      el.setAttribute('aria-label', itemLabel(c) + ', cell ' + (i + 1));
-      if (state.orders.some((o) => o.family === c.family && o.tier === c.tier)) el.classList.add('match');
+    if (fresh) {
+      el.dataset.kind = c.kind;
+      el.dataset.family = c.family;
+      if (c.kind === 'gen') {
+        el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + FAMILY_NAMES[c.family] + ' station</span>';
+        el.setAttribute('aria-label', FAMILY_NAMES[c.family] + ' station, cell ' + (i + 1) + '. Activate to generate.');
+      } else {
+        el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + FAMILIES[c.family].tiers[c.tier - 1] + '</span><span class="tier">T' + c.tier + '</span>';
+        el.setAttribute('aria-label', itemLabel(c) + ', cell ' + (i + 1));
+      }
     }
+    if (c.kind !== 'gen' && state.orders.some((o) => o.family === c.family && o.tier === c.tier)) el.classList.add('match');
   }
 }
 

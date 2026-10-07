@@ -142,6 +142,8 @@ h3 { margin: 0 0 6px; }
   cursor: pointer; opacity: 0.92;
 }
 .board-dom .cell .glyph { font-size: 1.15rem; }
+/* the cell button is always the event target (its content is re-rendered) */
+.board-dom .cell > * { pointer-events: none; }
 .board-dom .cell { text-shadow: 0 1px 2px #000, 0 0 4px #000c; }
 .board-dom .cell[data-kind="item"] { background: #00000070; }
 .board-dom .cell[data-kind="gen"] { background: #ffffff14; border-style: dashed; }
