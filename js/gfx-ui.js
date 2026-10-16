@@ -1,8 +1,9 @@
 // Kitchen Merge — Graphics section of the Settings screen: quality preset,
 // render scale, per-effect overrides, adaptive resolution, frame-rate readout
-// and a cost summary. Strings are localized here (the rest of the game ships
-// English only); the locale comes from ?lang= or navigator.languages.
+// and a cost summary. Strings are localized here in the game's current
+// language (i18n.js, which follows the StarHermit Language setting).
 import { PRESETS, CATEGORIES, resolve, presetTier, applyPreset } from './gfx.js';
+import { getLang } from './i18n.js';
 
 const EN_US = {
   graphics: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {tier})',
@@ -246,12 +247,7 @@ const SH_STRINGS = {
 };
 export function shStrings() { return SH_STRINGS[currentLocale()] || SH_STRINGS['en-US']; }
 
-function currentLocale() {
-  try {
-    const q = new URLSearchParams(location.search).get('lang');
-    return pickLocale([q, ...(navigator.languages || [navigator.language])].filter(Boolean));
-  } catch { return 'en-US'; }
-}
+function currentLocale() { return STRINGS[getLang()] ? getLang() : 'en-US'; }
 
 /**
  * Build and bind the Graphics controls.
@@ -259,15 +255,8 @@ function currentLocale() {
  * applies it, `getRenderer()` returns the live renderer (or null).
  */
 export function initGraphicsPanel({ root, getSaved, save, getRenderer }) {
-  const S = STRINGS[currentLocale()];
-  const tr = (k, vars) => (S[k] || EN_US[k]).replace('{tier}', vars || '');
-  const words = {};
-  for (const k of Object.keys(EN_US)) if (k.startsWith('d_')) words[k.slice(2)] = S[k];
-
-  const legend = root.querySelector('legend');
-  if (legend) legend.textContent = S.graphics;
+  let S, tr, words, presetSel, scale, scaleOut, catSel, adaptive, fps, summary, note;
   const host = root.querySelector('#gfx-controls');
-  host.textContent = '';
 
   const mk = (tag, props = {}, ...kids) => {
     const el = document.createElement(tag);
@@ -280,17 +269,30 @@ export function initGraphicsPanel({ root, getSaved, save, getRenderer }) {
     return el;
   };
 
+  // Builds the controls inside #gfx-controls only (the shared Sound/Language
+  // sections that game-options.js appends to the fieldset are left alone).
+  function build() {
+  S = STRINGS[currentLocale()];
+  tr = (k, vars) => (S[k] || EN_US[k]).replace('{tier}', vars || '');
+  words = {};
+  for (const k of Object.keys(EN_US)) if (k.startsWith('d_')) words[k.slice(2)] = S[k];
+
+  const legend = root.querySelector('legend');
+  if (legend) legend.textContent = S.graphics;
+  host.textContent = '';
+
+
   // Quality preset (keeps the historical #set-tier id).
-  const presetSel = mk('select', { id: 'set-tier', dataset: { gfx: 'preset' } });
+  presetSel = mk('select', { id: 'set-tier', dataset: { gfx: 'preset' } });
   host.append(mk('label', { className: 'gfx-row', htmlFor: 'set-tier' }, mk('span', { textContent: S.quality }), presetSel));
 
   // Render scale slider with an inline value.
-  const scale = mk('input', { type: 'range', id: 'gfx-scale', min: '50', max: '200', step: '5', dataset: { gfx: 'render_scale' } });
-  const scaleOut = mk('output', { id: 'gfx-scale-value', htmlFor: 'gfx-scale', className: 'gfx-value' });
+  scale = mk('input', { type: 'range', id: 'gfx-scale', min: '50', max: '200', step: '5', dataset: { gfx: 'render_scale' } });
+  scaleOut = mk('output', { id: 'gfx-scale-value', htmlFor: 'gfx-scale', className: 'gfx-value' });
   host.append(mk('label', { className: 'gfx-row gfx-slider', htmlFor: 'gfx-scale' }, mk('span', { textContent: S.renderScale }), mk('span', { className: 'gfx-slider-wrap' }, scale, scaleOut)));
 
   // One select per category.
-  const catSel = {};
+  catSel = {};
   const grid = mk('div', { className: 'gfx-cats' });
   for (const cat of Object.keys(CATEGORIES)) {
     const sel = mk('select', { id: 'gfx-' + cat, dataset: { gfx: cat } });
@@ -299,15 +301,17 @@ export function initGraphicsPanel({ root, getSaved, save, getRenderer }) {
   }
   host.append(grid);
 
-  const adaptive = mk('input', { type: 'checkbox', id: 'gfx-adaptive', dataset: { gfx: 'adaptive' } });
-  const fps = mk('input', { type: 'checkbox', id: 'gfx-fps', dataset: { gfx: 'show_fps' } });
+  adaptive = mk('input', { type: 'checkbox', id: 'gfx-adaptive', dataset: { gfx: 'adaptive' } });
+  fps = mk('input', { type: 'checkbox', id: 'gfx-fps', dataset: { gfx: 'show_fps' } });
   host.append(
     mk('label', { className: 'gfx-check', htmlFor: 'gfx-adaptive' }, adaptive, mk('span', { textContent: ' ' + S.adaptive })),
     mk('label', { className: 'gfx-check', htmlFor: 'gfx-fps' }, fps, mk('span', { textContent: ' ' + S.showFps })),
   );
-  const summary = mk('p', { id: 'gfx-summary', className: 'muted gfx-summary' });
-  const note = mk('p', { id: 'gfx-post-note', className: 'gfx-note', hidden: true, textContent: S.postNote });
+  summary = mk('p', { id: 'gfx-summary', className: 'muted gfx-summary' });
+  note = mk('p', { id: 'gfx-post-note', className: 'gfx-note', hidden: true, textContent: S.postNote });
   host.append(summary, note);
+  bind();
+  }
 
   function detected() {
     const r = getRenderer();
@@ -354,6 +358,7 @@ export function initGraphicsPanel({ root, getSaved, save, getRenderer }) {
 
   const update = (fn) => { const next = fn({ ...getSaved() }); save(next); render(); };
 
+  function bind() {
   presetSel.addEventListener('change', () => update((s) => applyPreset(s, presetSel.value)));
   for (const [cat, sel] of Object.entries(catSel)) {
     sel.addEventListener('change', () => update((s) => { if (sel.value === 'preset') delete s[cat]; else s[cat] = sel.value; return s; }));
@@ -364,10 +369,19 @@ export function initGraphicsPanel({ root, getSaved, save, getRenderer }) {
   });
   adaptive.addEventListener('change', () => update((s) => { s.adaptive = adaptive.checked; return s; }));
   fps.addEventListener('change', () => update((s) => { s.show_fps = fps.checked; return s; }));
+  }
 
   // Keep the summary's pixel size / fallback note current while the panel is open.
   setInterval(() => { if (root.offsetParent !== null) refreshInfo(); }, 1000);
 
+  build();
   render();
-  return { render, refreshInfo };
+  // Language change: rebuild the labels and options in place, keeping focus on the same control.
+  function relabel() {
+    const focused = document.activeElement && host.contains(document.activeElement) ? document.activeElement.id : null;
+    build();
+    render();
+    if (focused && document.getElementById(focused)) document.getElementById(focused).focus({ preventScroll: true });
+  }
+  return { render, refreshInfo, relabel };
 }

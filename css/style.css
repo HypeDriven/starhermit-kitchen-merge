@@ -290,7 +290,8 @@ body.high-contrast #overlay-results .panel { background-image: none; }
 .gfx-section select { max-width: 62%; min-height: 36px; font: inherit; font-size: 0.9rem; }
 fieldset .gfx-cats label.gfx-stack { flex-direction: column; align-items: stretch; gap: 4px; margin: 6px 0; }
 .gfx-cats label.gfx-stack select { max-width: 100%; width: 100%; }
-.gfx-section .gfx-row > span:first-child { min-width: 0; }
+.gfx-section .gfx-row > span:first-child { min-width: 0; flex: 0 1 auto; overflow-wrap: break-word; hyphens: auto; }
+.gfx-section label.gfx-slider { flex-wrap: wrap; }
 .gfx-slider-wrap { display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end; white-space: nowrap; }
 .gfx-slider-wrap input[type="range"] { min-width: 80px; }
 .gfx-value { font-variant-numeric: tabular-nums; min-width: 4.5ch; text-align: right; }
@@ -326,3 +327,10 @@ body.high-contrast h1 { text-shadow: none; }
 /* StarHermit account: avatar beside the profile line */
 .profile-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 0 0; }
 .profile-row .avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; flex: none; }
+
+/* Long compound words (German) in the shared Sound/Language/Report rows
+   hyphenate instead of breaking mid-word on narrow screens. */
+.game-options-row > span:first-child { hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
+@media (max-width: 480px) {
+  fieldset .game-options-row { grid-template-columns: minmax(0, 1fr) minmax(80px, 36%) auto; gap: 6px; }
+}

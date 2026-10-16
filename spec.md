@@ -31,7 +31,10 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | `js/session.js` | Round controller: tick loop, undo stack, replay recording, `localStorage` persistence (`store`). |
 | `js/render.js` | `KitchenRenderer` — Three.js scene, family silhouettes, procedural textures, lighting and shadows, post-processing chain, adaptive resolution, particle pool, ambient motion, camera shake. |
 | `js/gfx.js` | Pure graphics quality model: presets, categories, GPU detection (`detectPreset`), `resolve`, `presetTier`, `applyPreset`, `describe`. |
-| `js/gfx-ui.js` | Settings → Graphics controls and their strings in nine locales (`pickLocale`), plus the StarHermit account strings (`shStrings`). |
+| `js/i18n.js`, `js/locales/` | Localization core (`T`, `N`, `setLocale`, `onLanguage`, `applyMarkup`) and the per-locale catalogues keyed by the US-English text. |
+| `js/sh-language.js` | Shared StarHermit language preference (`window.StarHermitLanguage`), an unmodified copy of `tools/sh-language.js`, loaded in `<head>`. |
+| `game-options.js` | Shared Sound / frame-rate / Language / Report-a-problem sections, an unmodified copy of `tools/game-options.js`. |
+| `js/gfx-ui.js` | Settings → Graphics controls and their strings in nine locales, plus the StarHermit account strings (`shStrings`); both follow the game language. |
 | `js/audio.js` | `AudioEngine` — four gain buses, authored Opus clips with synthesised fallbacks, seeded arpeggio music, noise ambience. |
 | `js/main.js` | Bootstrap, screen navigation, input (pointer/keyboard/gamepad), HUD, results, achievements, account UI. |
 | `js/platform.js` | `createPlatform()` — StarHermit adapter over the SDK (profile/avatar, cloud save, settings KV, bindings, invite, read-only board, sign-in) plus the time/score routes. |
@@ -42,7 +45,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | `lib/addons/` | Three.js r185 addons (`three/addons/` in the import map): EffectComposer, RenderPass, ShaderPass, OutputPass, GTAOPass, UnrealBloomPass, SMAAPass, FXAAShader, RoomEnvironment, RoundedBoxGeometry and the shaders/math they import. |
 | `assets/` | Generated key art (`title-keyart.webp`, `results-plating.webp`). |
 | `sfx/` | 14 Opus clips + `manifest.txt` (canonical), `manifest.md`, `manifest.json` (generator input). |
-| `tests/` | `rules.test.js` (16 assertions), `gfx.test.js` (graphics model + locale coverage) and `platform.test.js` (StarHermit adapter) via `npm test`, `validate-content.js`, `e2e.mjs` (real-UI playthrough), `smoke.cjs`/`run-smoke.mjs`. |
+| `tests/` | `rules.test.js` (16 assertions), `gfx.test.js` (graphics model + locale coverage) and `platform.test.js` (StarHermit adapter, conditional cloud-save writes and conflict merge) and `i18n.test.mjs` (every key in all nine locales, keys from `i18n-keys.mjs`) via `npm test`, `validate-content.js`, `e2e.mjs` (real-UI playthrough), `smoke.cjs`/`run-smoke.mjs`. |
 | `coverart.png`, `icon.png`, `favicon.svg` | Platform art. |
 
 ---
@@ -435,18 +438,34 @@ every event is always audible. This table is the source for `sfx/manifest.txt`.
 
 **Required languages:** en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT.
 
-**Today the game ships English only**, and it ships it as literals: UI chrome in
-`index.html`, dish and family names in `FAMILIES` (`rules.js`), level names and blurbs in
-`content.js`, invalid-action sentences in `explainInvalid`, and runtime strings (toasts,
-announcements, results labels) in `main.js`. `<html lang="en">` is static.
+Every player-facing string is localized: UI chrome in `index.html` carries `data-i18n` /
+`data-i18n-aria` attributes, and code calls `T('<US-English text>', vars)` from `js/i18n.js`.
+Catalogues in `js/locales/` are keyed by the US-English text (en-US is the identity, en-GB lists
+spelling changes, es-ES and fr-CA list their differences from es-419 and fr-FR). Content stays
+English data — family and dish names in `FAMILIES`, themes, lessons, challenges, achievements,
+rule refusals from `explainInvalid` and hint sentences — and translates at display time; the
+engine matches on `family` and `tier`, never on a name. Journey/daily/practice names and blurbs
+are composed in `main.js` (`levelName`, `levelBlurb`). Numbers stay digits.
 
-The design's requirements for the localized build, which the current structure is close to
-but does not yet satisfy, are in §17: one string catalogue per locale keyed by id, language
-chosen from `navigator.languages` with a Settings override and a regional fallback chain
-(`fr-CA → fr-FR → en-US`), and layout that tolerates **+40 %** string expansion — the order
-chips, action buttons and HUD labels are the tight spots, and the wrapping rails already
-give them room to grow. Dish names are localizable content, not identifiers: the engine
-matches on `family` and `tier`, never on a display name.
+- Settings → Graphics fieldset → **Language → Game language** (rendered by `game-options.js` from
+  the `sh-language.js` instance) offers **Automatic — <resolved language>** plus the nine locales by
+  native name, with a status line (Saved to account / Saved on this device / Account sync
+  unavailable). It is reachable from the title and from the pause menu during a round.
+- A change applies immediately without restarting the round: `data-i18n` text is re-applied,
+  `<html lang>` updates, and `relocalize()` re-renders the title (profile line, journey pill,
+  account buttons), the open list or setup screen, the scores tables, the theme names, the
+  Graphics controls (rebuilt inside `#gfx-controls` only, so the shared sections stay), How to Play
+  controls line, and in play the objective, HUD, orders, board cell labels, the last refusal and the
+  results overlay (including the leaderboard line).
+- Resolution (`js/sh-language.js`): explicit game choice → for Automatic, the StarHermit account's
+  `preferredLanguage` (`GET /api/v1/me/language`, signed in only) → `navigator.languages` → en-US;
+  tags map to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`). The
+  choice (`auto` or a locale) is stored per player in `localStorage['kitchen-merge.language.<user|guest>']`
+  and, signed in, in the per-player settings key `ui.language` as `{ choice }`; the game's own
+  settings mirror never adopts or patches `ui.*` keys, and the platform preference is never written.
+  `?lang=` forces a locale for the page load (QA links) and hides the selector.
+- Layout: the rails and action tray wrap; on narrow screens long German labels in the shared rows
+  and the render-scale row hyphenate or wrap instead of overflowing at 390 px.
 
 ---
 
@@ -515,8 +534,18 @@ fixed.
   "Leaderboard rank: #N" (or "Score posted…" / "Score not posted…").
 - **Sessions** — a per-round `sessionId` identifies leaderboard rows.
 
+- **Save conflicts** — after a load, cloud writes are conditional (SDK ETag). When another device
+  saved first the SDK emits `saveconflict`; `resolveConflict()` reloads the slot and merges it with
+  this device's document (`mergeDocs`: furthest journey stage, best stars per stage, union of
+  lessons, achievements, play days and mastery stages, both score tables de-duplicated by session
+  and capped at 20, this device's settings), adopts the result and saves it again. A failed reload
+  keeps local progress and shows the unreachable status.
+- **Report a problem** — Settings (signed in only, from `game-options.js`) files a bug report
+  through `StarHermit.reportBug`; uncaught errors are filed as crash reports through
+  `StarHermit.captureCrashes` (SDK-capped).
+
 Account strings (sign-in, invite, toasts, leaderboard line) are localized in the nine locales (`shStrings()` in
-`js/gfx-ui.js`).
+`js/gfx-ui.js`) and follow the game language.
 
 **Not used:** `score-script.js` only accepts leaderboard results and `server.js` is the local
 static host + score API, so platform multiplayer sessions, matchmaking, session invites, chat, replays and platform achievements
@@ -600,7 +629,12 @@ and Esc, pause→settings, leave, a Practice round with hint and undo, the local
 and a full touch playthrough with a 44 px minimum cell assertion; each pass ends with
 StarHermit: standalone makes no `/api` or `/ws` request and shows no account buttons, and a
 `#game_token=` launch against a stubbed API shows the nickname, strips the token, loads
-`game:<slug>`, and Invite a friend shows a toast. Any page error or
+`game:<slug>`, and Invite a friend shows a toast. Then a language step: with the stubbed
+`GET /api/v1/me/language` answering fr-CA, Automatic resolves to fr-CA (title reads "Jouer");
+choosing Deutsch in Settings re-renders the settings and Graphics labels, PUTs `ui.language`,
+files a Report a problem (`/reports`, kind bug) and fits 390 px without horizontal overflow;
+switching to Italiano from the pause menu mid-round re-renders the HUD, orders rail, objective and
+board labels while the round's board is kept; Automatic then returns to fr-CA. Any page error or
 non-benign console error or warning fails the run.
 
 **QA bar (per `agents/qa.md`), as checkable statements:**
@@ -656,15 +690,11 @@ No character animation is needed: the game has no humanoid.
 
 ## 17. Design intent not yet implemented
 
-1. **Localization.** Nine locales are required; the game ships English literals. The intended
-   shape is a per-locale string catalogue keyed by id, `navigator.languages` detection with a
-   Settings override, a regional fallback chain, `<html lang>` updated at boot, and a +40 %
-   expansion allowance in the order chips, action tray and HUD.
-2. **Voice bus is a mix path with nothing routed to it.** The slider and gain node exist; no
+1. **Voice bus is a mix path with nothing routed to it.** The slider and gain node exist; no
    cue currently plays through `voice`. Spoken order callouts are the intended use.
-3. **Resume-in-progress.** `store.saveSnapshot` / `loadSnapshot` are implemented but unused;
+2. **Resume-in-progress.** `store.saveSnapshot` / `loadSnapshot` are implemented but unused;
    the design wants a round interrupted by a closed tab to be resumable from the title.
-4. **Player-scoped daily identity.** Once platform identity is available, leaderboard rows
+3. **Player-scoped daily identity.** Once platform identity is available, leaderboard rows
    should key on the player rather than a per-round session id.
 
 ## Browser interference

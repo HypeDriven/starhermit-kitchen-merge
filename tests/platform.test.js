@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createPlatform } from '../js/platform.js';
+import { createPlatform, mergeDocs } from '../js/platform.js';
 
 // The SDK is a UMD classic script; under "type": "module" load it as CommonJS by hand.
 const sdkModule = { exports: {} };
@@ -14,15 +14,28 @@ const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const token = () => 'h.' + b64u({ sub: 'user-123456789', game_scope: 'gid-1', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.s';
 
 function backend() {
-  const calls = [], saves = {}, settings = {};
+  const calls = [], saves = {}, settings = {}, etags = {};
+  let version = 0;
   const fetch = async (url, init = {}) => {
     const method = init.method || 'GET';
     const body = init.body ? JSON.parse(init.body) : undefined;
     calls.push({ method, url, body, auth: init.headers && init.headers.Authorization });
     const r = (st, b) => new Response(b, { status: st });
     if (url.includes('/cloud-saves/')) {
-      const key = decodeURIComponent(url.split('/cloud-saves/')[1]);
-      if (method === 'PUT') { saves[key] = Buffer.from(body.dataBase64, 'base64'); return r(200, '{}'); }
+      // Conditional writes like the platform: If-Match must name the current
+      // version, If-None-Match: * needs an empty slot; otherwise 412.
+      const rest = decodeURIComponent(url.split('/cloud-saves/')[1]);
+      const key = rest.replace(/\/info$/, '');
+      if (rest.endsWith('/info')) return r(200, JSON.stringify(saves[key] ? { exists: true, etag: etags[key] } : { exists: false }));
+      if (method === 'PUT') {
+        const h = init.headers || {};
+        if ((h['If-Match'] && h['If-Match'] !== etags[key]) || (h['If-None-Match'] === '*' && saves[key])) {
+          return r(412, JSON.stringify({ error: 'precondition_failed', etag: etags[key] }));
+        }
+        saves[key] = Buffer.from(body.dataBase64, 'base64');
+        etags[key] = '"v' + (++version) + '"';
+        return r(200, JSON.stringify({ etag: etags[key] }));
+      }
       return saves[key] ? r(200, saves[key]) : r(404, '');
     }
     if (url.endsWith('/profile')) return r(200, JSON.stringify({ username: 'pk', nickname: 'Al' }));
@@ -108,6 +121,57 @@ test('standalone: no platform calls', async () => {
 });
 
 test('hosted domain without a token offers sign-in', () => {
-  const { platform } = make('', async () => { throw new Error('offline'); }, 'gid-1.starhermit.com');
+  const { platform } = make('', async () => { throw new Error('offline'); }, '0b9d6f2e-3c4a-4e5b-9a7c-1d2e3f405162.starhermit.com');
   assert.equal(platform.canSignIn(), true);
+});
+
+test('save conflict: a write that lost to another device reloads, merges both sides and saves again', async (t) => {
+  const be = backend();
+  const a = make('#game_token=' + token(), be.fetch);
+  const b = make('#game_token=' + token(), be.fetch);
+  t.after(() => { a.sh.signOut(); b.sh.signOut(); });
+  a.m.ls.progress = { journeyStage: 5, stars: { 1: 3, 2: 1 }, tutorialsDone: ['learn-1'], achievements: {}, playDays: ['2026-10-01'] };
+  b.m.ls.progress = { journeyStage: 3, stars: { 2: 2 }, tutorialsDone: ['learn-2'], achievements: { first_service: { at: '2026-10-02', announced: true } }, playDays: ['2026-10-02'] };
+  a.m.ls.scores = { 'journey-1': [{ score: 50, sessionId: 'a1' }] };
+  b.m.ls.scores = { 'journey-1': [{ score: 70, sessionId: 'b1' }] };
+  await a.platform.loadCloud(); // empty slot: A pushes first
+  await b.platform.loadCloud(); // B adopts A's save, then progresses locally
+  b.m.ls.progress = { ...b.m.ls.progress, journeyStage: 6, stars: { ...b.m.ls.progress.stars, 6: 2 }, achievements: { first_service: { at: '2026-10-02', announced: true } } };
+  b.m.ls.scores = { 'journey-1': [...b.m.ls.scores['journey-1'], { score: 70, sessionId: 'b1' }] };
+  a.m.ls.progress = { ...a.m.ls.progress, achievements: { hot_streak: { at: '2026-10-03', announced: false } } };
+  a.platform.scheduleCloudPush(); await a.platform.flushCloud(); // A saves again (new version)
+  let conflicted = false;
+  b.sh.on('saveconflict', () => { conflicted = true; });
+  b.platform.scheduleCloudPush();
+  assert.equal(await b.platform.flushCloud(), false, 'B lost the conditional write');
+  assert.ok(conflicted);
+  for (let i = 0; i < 20 && b.sh.saveConflicted(); i++) await new Promise((r) => setTimeout(r, 5));
+  await b.platform.flushCloud();
+  const p = b.m.ls.progress;
+  assert.equal(p.journeyStage, 6);
+  assert.equal(p.stars['1'], 3);
+  assert.equal(p.stars['6'], 2);
+  assert.ok(p.achievements.hot_streak && p.achievements.first_service);
+  assert.deepEqual(b.m.ls.scores['journey-1'].map((e) => e.sessionId), ['b1', 'a1']);
+  const c = make('#game_token=' + token(), be.fetch);
+  c.m.ls.progress = {};
+  await c.platform.loadCloud();
+  assert.equal(c.m.ls.progress.journeyStage, 6, 'the merged document reached the cloud');
+  assert.ok(c.m.ls.progress.achievements.hot_streak);
+  c.sh.signOut();
+});
+
+test('mergeDocs keeps the better side of every progress field and this device\'s settings', () => {
+  const m = mergeDocs(
+    { settings: { music: 0.1 }, progress: { journeyStage: 9, stars: { 1: 1 }, masteryStages: [8], masteryDone: 1, playDays: ['d1'] }, scores: {} },
+    { settings: { music: 0.9 }, progress: { journeyStage: 2, stars: { 1: 3 }, masteryStages: [16], playDays: ['d2'] }, scores: { x: [{ score: 1, sessionId: 's' }] } },
+  );
+  assert.equal(m.settings.music, 0.9);
+  assert.equal(m.progress.journeyStage, 9);
+  assert.equal(m.progress.stars['1'], 3);
+  assert.deepEqual(m.progress.masteryStages.sort(), [16, 8].sort());
+  assert.equal(m.progress.masteryDone, 2);
+  assert.deepEqual(m.progress.playDays, ['d1', 'd2']);
+  assert.equal(m.scores.x.length, 1);
+  assert.deepEqual(mergeDocs(null, { progress: { journeyStage: 1 } }).progress.journeyStage, 1);
 });

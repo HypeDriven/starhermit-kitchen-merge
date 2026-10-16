@@ -11,18 +11,21 @@ import { initGraphicsPanel, shStrings } from './gfx-ui.js';
 import { AudioEngine } from './audio.js';
 import { Session, store, lsSet } from './session.js';
 import { createPlatform } from './platform.js';
+import { T, N, onLanguage, initLanguage, applyMarkup } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
 // ------------------------------------------------------------- platform ----
 // StarHermit adapter (js/platform.js over js/starhermit-sdk.js) with graceful
 // offline fallback. Hosted mode = the SDK holds a launch token.
-const SH_TEXT = shStrings();
+// Resolve the game language first: everything below renders in it.
+const language = initLanguage();
+const SH_TEXT = () => shStrings();
 
 const SYNC_LABELS = {
-  synced: 'Cloud save: synced',
-  saving: 'Cloud save: saving…',
-  error: 'Cloud save unreachable — progress is safe on this device',
+  synced: N('Cloud save: synced'),
+  saving: N('Cloud save: saving…'),
+  error: N('Cloud save unreachable — progress is safe on this device'),
 };
 
 const platform = createPlatform({
@@ -36,7 +39,7 @@ const platform = createPlatform({
       applySettings();
       if (gfxPanel) gfxPanel.render();
     },
-    onAuth: (signedIn) => { if (!signedIn) toast(SH_TEXT.signedOut, 4000); },
+    onAuth: (signedIn) => { if (!signedIn) toast(SH_TEXT().signedOut, 4000); },
   },
 }).init();
 
@@ -56,9 +59,10 @@ function keyName(action) {
 function renderControlsHelp() {
   const el = $('help-controls');
   if (!el) return;
-  el.textContent = 'Pointer or touch: tap to select, tap target to act. Keyboard: arrow keys move focus, Enter selects, ' +
-    keyName('serve') + ' serves, ' + keyName('discard') + ' discards, ' + keyName('undo') + ' undoes (practice), ' +
-    keyName('hint') + ' hints, ' + keyName('pause') + ' pauses, ' + keyName('camera') + ' resets the camera.';
+  el.textContent = T('Pointer or touch: tap to select, tap target to act. Keyboard: arrow keys move focus, Enter selects, {serve} serves, {discard} discards, {undo} undoes (practice), {hint} hints, {pause} pauses, {camera} resets the camera.', {
+    serve: keyName('serve'), discard: keyName('discard'), undo: keyName('undo'),
+    hint: keyName('hint'), pause: keyName('pause'), camera: keyName('camera'),
+  });
 }
 
 // Every local persist schedules a debounced cloud push: localStorage first,
@@ -92,12 +96,33 @@ let tutorialState = null;
 let lastFocus = null;
 
 const GLYPHS = { grain: '▬', garden: '●', dairy: '▮', ember: '▲' };
-const FAMILY_NAMES = { grain: 'Grain', garden: 'Garden', dairy: 'Dairy', ember: 'Ember' };
+// Family and dish names live in rules.js as English content; they translate at display time.
+const familyName = (f) => T(FAMILIES[f].name);
+const dishName = (f, tier) => T(FAMILIES[f].tiers[tier - 1]);
 
 function itemLabel(cell) {
-  const fam = FAMILIES[cell.family];
-  return fam.tiers[cell.tier - 1] + ' (' + fam.name + ' tier ' + cell.tier + ')';
+  return T('{dish} ({family} tier {tier})', { dish: dishName(cell.family, cell.tier), family: familyName(cell.family), tier: cell.tier });
 }
+
+// Level display text (content.js keeps English names; these mirror its rules).
+function levelName(level) {
+  if (level.kind === 'journey') return level.mastery ? T('Mastery {n}', { n: level.stage / 8 }) : T('Stage {n}', { n: level.stage });
+  if (level.kind === 'daily') return T('Daily {date}', { date: level.date });
+  if (level.kind === 'practice') return T('Practice ({difficulty})', { difficulty: T(PRACTICE_LABELS[level.id.slice(9)] || level.id.slice(9)) });
+  if (level.kind === 'tutorial') { const t = TUTORIALS.find((x) => x.id === level.tutorialId); return t ? T(t.title) : level.id; }
+  return T(level.name || level.id);
+}
+function levelBlurb(level) {
+  if (level.kind === 'journey') {
+    if (level.mastery) return T('Limited moves. Serve efficiently.');
+    return level.families.length > 1 ? T('New station: {name}', { name: familyName(level.families[level.families.length - 1]) }) : T('Serve the orders in time.');
+  }
+  if (level.kind === 'daily') return T('Shared seed for everyone today. Highest score wins.');
+  if (level.kind === 'practice') return T('Unranked. Undo allowed.');
+  if (level.kind === 'challenge') { const c = CHALLENGES.find((x) => x.id === level.id); return c ? T(c.blurb) : ''; }
+  return level.blurb ? T(level.blurb) : '';
+}
+const PRACTICE_LABELS = { relaxed: N('Relaxed'), standard: N('Standard'), intense: N('Intense') };
 
 // ------------------------------------------------------------ navigation ----
 const SCREENS = ['title', 'setup', 'play', 'help', 'settings', 'scores', 'list'];
@@ -188,7 +213,7 @@ function bindSettings() {
   const themeSel = $('set-theme');
   for (const t of THEMES) {
     const o = document.createElement('option');
-    o.value = t.id; o.textContent = t.name;
+    o.value = t.id; o.textContent = T(t.name);
     themeSel.appendChild(o);
   }
   themeSel.value = settings.theme;
@@ -207,7 +232,7 @@ function bindSettings() {
     const p = store.getProgress();
     p.tutorialsDone = [];
     store.saveProgress(p);
-    toast('Tutorials will play again.');
+    toast(T('Tutorials will play again.'));
     openLearn();
   });
 }
@@ -224,7 +249,7 @@ function setSelected(i) {
   updateActionTray();
   if (i != null && session) {
     const c = session.state.board[i];
-    if (c && c.kind === 'item') announce('Selected ' + itemLabel(c));
+    if (c && c.kind === 'item') announce(T('Selected {item}', { item: itemLabel(c) }));
   }
 }
 
@@ -303,7 +328,7 @@ function updateBoardDom() {
       if (fresh) {
         el.dataset.kind = 'empty'; delete el.dataset.family;
         el.innerHTML = '';
-        el.setAttribute('aria-label', 'Empty cell ' + (i + 1));
+        el.setAttribute('aria-label', T('Empty cell {n}', { n: i + 1 }));
       }
       continue;
     }
@@ -312,11 +337,11 @@ function updateBoardDom() {
       el.dataset.kind = c.kind;
       el.dataset.family = c.family;
       if (c.kind === 'gen') {
-        el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + FAMILY_NAMES[c.family] + ' station</span>';
-        el.setAttribute('aria-label', FAMILY_NAMES[c.family] + ' station, cell ' + (i + 1) + '. Activate to generate.');
+        el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + T('{family} station', { family: familyName(c.family) }) + '</span>';
+        el.setAttribute('aria-label', T('{family} station, cell {n}. Activate to generate.', { family: familyName(c.family), n: i + 1 }));
       } else {
-        el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + FAMILIES[c.family].tiers[c.tier - 1] + '</span><span class="tier">T' + c.tier + '</span>';
-        el.setAttribute('aria-label', itemLabel(c) + ', cell ' + (i + 1));
+        el.innerHTML = '<span class="glyph">' + glyph + '</span><span>' + dishName(c.family, c.tier) + '</span><span class="tier">T' + c.tier + '</span>';
+        el.setAttribute('aria-label', T('{item}, cell {n}', { item: itemLabel(c), n: i + 1 }));
       }
     }
     if (c.kind !== 'gen' && state.orders.some((o) => o.family === c.family && o.tier === c.tier)) el.classList.add('match');
@@ -375,10 +400,13 @@ function onCellAction(i) {
   setSelected(null);
 }
 
+// Rule refusals arrive as English sentences from rules.js; they translate here.
+let explained = null;
 function explain(reason) {
   if (!reason) return;
-  $('action-explain').textContent = reason;
-  announce(reason, true);
+  explained = reason;
+  $('action-explain').textContent = T(reason);
+  announce(T(reason), true);
   audio.play('invalid', 3);
 }
 
@@ -389,7 +417,7 @@ function updateHud() {
   $('hud-score').textContent = String(totalScore(s));
   const streakEl = $('hud-streak');
   if (s.streak >= 2) {
-    streakEl.textContent = 'Streak x' + s.streak;
+    streakEl.textContent = T('Streak x{n}', { n: s.streak });
     streakEl.classList.remove('hidden');
   } else streakEl.classList.add('hidden');
   const timerEl = $('hud-timer');
@@ -399,10 +427,10 @@ function updateHud() {
     const urgent = secs <= 15;
     timerEl.classList.toggle('urgent', urgent);
     // One-shot audible warning the first time a timed round crosses 15 s.
-    if (urgent && !warnedLowTime) { warnedLowTime = true; audio.play('warn', s.tick); announce('Fifteen seconds left.', true); }
+    if (urgent && !warnedLowTime) { warnedLowTime = true; audio.play('warn', s.tick); announce(T('Fifteen seconds left.'), true); }
     if (!urgent) warnedLowTime = false;
   } else if (s.movesLeft != null) {
-    timerEl.textContent = s.movesLeft + ' moves';
+    timerEl.textContent = T('{n} moves', { n: s.movesLeft });
     timerEl.classList.toggle('urgent', s.movesLeft <= 5);
   } else timerEl.textContent = '';
   // Orders
@@ -411,15 +439,15 @@ function updateHud() {
   for (const o of s.orders) {
     const li = document.createElement('li');
     li.className = 'order' + (o.timeLeft < 100 ? ' expiring' : '');
-    const name = FAMILIES[o.family].tiers[o.tier - 1];
+    const name = dishName(o.family, o.tier);
     li.innerHTML = '<span class="order-name">' + name + '</span><span class="order-value">' + o.value + '</span>' +
       '<div class="order-bar"><i style="width:' + Math.max(0, (o.timeLeft / o.maxTime) * 100) + '%"></i></div>';
-    li.setAttribute('aria-label', 'Order: ' + name + ', value ' + o.value + ', ' + Math.ceil(o.timeLeft / 10) + ' seconds left');
+    li.setAttribute('aria-label', T('Order: {name}, value {value}, {n} seconds left', { name, value: o.value, n: Math.ceil(o.timeLeft / 10) }));
     list.appendChild(li);
   }
   const prog = [];
-  if (s.ordersTarget != null) prog.push('Orders: ' + s.fulfilled + '/' + s.ordersTarget);
-  else prog.push('Served: ' + s.fulfilled);
+  if (s.ordersTarget != null) prog.push(T('Orders: {done}/{target}', { done: s.fulfilled, target: s.ordersTarget }));
+  else prog.push(T('Served: {n}', { n: s.fulfilled }));
   $('hud-progress').textContent = prog.join(' · ');
 }
 
@@ -435,14 +463,15 @@ function onGameEvent(e, state) {
       audio.play('merge', seed);
       if (renderer && renderer.ok) { renderer.burst(e.cell, 0xffe28a, 14); renderer.shake(0.05); }
       if (e.tier >= 5) unlock('merge_master');
-      announce('Merged into ' + FAMILIES[e.family].tiers[e.tier - 1]);
+      announce(T('Merged into {dish}', { dish: dishName(e.family, e.tier) }));
       if (tutorialState) tutorialProgress('merge');
       break;
     case 'submit': {
       audio.play(e.streak >= 3 ? 'streak' : 'submit', seed);
       if (renderer && renderer.ok) { renderer.burst(e.cell, 0x8affc0, 20); renderer.shake(0.08); }
-      announce('Served ' + FAMILIES[e.order.family].tiers[e.order.tier - 1] + ' for ' + e.gained + ' points' +
-        (e.streak > 1 ? ', streak ' + e.streak : ''));
+      announce(e.streak > 1
+        ? T('Served {dish} for {points} points, streak {streak}', { dish: dishName(e.order.family, e.order.tier), points: e.gained, streak: e.streak })
+        : T('Served {dish} for {points} points', { dish: dishName(e.order.family, e.order.tier), points: e.gained }));
       unlock('first_service');
       if (e.streak >= 5) unlock('hot_streak');
       if (settings.haptics && navigator.vibrate) navigator.vibrate(20);
@@ -452,11 +481,11 @@ function onGameEvent(e, state) {
     case 'trash': audio.play('trash', seed); break;
     case 'expire':
       audio.play('expire', seed);
-      announce('An order expired.', true);
+      announce(T('An order expired.'), true);
       break;
     case 'new-order':
       audio.play('arrive', seed);
-      announce('New order: ' + FAMILIES[e.order.family].tiers[e.order.tier - 1]);
+      announce(T('New order: {dish}', { dish: dishName(e.order.family, e.order.tier) }));
       break;
     case 'end':
       audio.play(e.reason === 'orders-complete' ? 'win' : 'lose', seed);
@@ -469,12 +498,12 @@ function onGameEvent(e, state) {
 function tutorialProgress(kind) {
   if (!tutorialState || tutorialState.goal.kind !== kind) return;
   tutorialState.done++;
-  announce(tutorialState.title + ': ' + tutorialState.done + ' of ' + tutorialState.goal.count);
+  announce(T('{lesson}: {done} of {count}', { lesson: T(tutorialState.title), done: tutorialState.done, count: tutorialState.goal.count }));
   if (tutorialState.done >= tutorialState.goal.count) {
     const p = store.getProgress();
     if (!p.tutorialsDone.includes(tutorialState.id)) p.tutorialsDone.push(tutorialState.id);
     store.saveProgress(p);
-    toast('Lesson complete!');
+    toast(T('Lesson complete!'));
     setTimeout(() => { endRoundEarly(); openLearn(); }, 800);
   }
 }
@@ -506,18 +535,19 @@ function startRound(level, mode) {
   buildBoardDom(session.state);
   $('hud-objective').textContent = objectiveText(level);
   $('action-explain').textContent = '';
+  explained = null;
   show('play');
   requestAnimationFrame(() => { fitBoard(); if (renderer && renderer.ok) renderer.resize(); });
   updateHud();
   session.start();
   audio.ensure(); audio.startAmbience(); audio.startMusic(level.seed);
-  if (tutorialState) toast(tutorialState.brief, 6000);
+  if (tutorialState) toast(T(tutorialState.brief), 6000);
 }
 
 function objectiveText(level) {
-  if (level.ordersTarget != null) return 'Serve ' + level.ordersTarget + ' orders';
-  if (level.timeLimit != null) return 'Serve as many orders as you can';
-  return 'Free service';
+  if (level.ordersTarget != null) return T('Serve {n} orders', { n: level.ordersTarget });
+  if (level.timeLimit != null) return T('Serve as many orders as you can');
+  return T('Free service');
 }
 
 function endRoundEarly() {
@@ -536,29 +566,10 @@ function leaveRound() {
 function showResults(result) {
   audio.stopMusic(); audio.stopAmbience();
   if (currentMode === 'tutorial') { markPlayDay(); return; } // lessons end via tutorialProgress
-  const names = { 'orders-complete': 'All orders served!', 'time-up': 'Time is up', 'moves-exhausted': 'Out of moves' };
-  $('results-heading').textContent = result.reason === 'orders-complete' ? 'Round Complete' : 'Round Over';
-  $('results-reason').textContent = names[result.reason] || result.reason;
-  const dl = $('results-breakdown');
-  dl.innerHTML = '';
-  const rows = [
-    ['Orders served', result.components.orders],
-    ['Streak bonuses', result.components.streaks],
-    ['Board efficiency', result.components.efficiency],
-    ['Dishes served', result.fulfilled],
-    ['Best streak', result.bestStreak],
-    ['Invalid actions', result.invalidActions],
-  ];
-  for (const [k, v] of rows) {
-    const dt = document.createElement('dt'); dt.textContent = k;
-    const dd = document.createElement('dd'); dd.textContent = String(v);
-    dl.append(dt, dd);
-  }
-  $('results-total').textContent = 'Total: ' + result.score;
-
   // Achievements + progression.
   const newAch = evaluateAchievements(result);
-  $('results-achievements').textContent = newAch.length ? 'Achievement unlocked: ' + newAch.join(', ') : '';
+  shownResult = { result, newAch };
+  renderResultsText();
 
   // Progression.
   const p = store.getProgress();
@@ -590,9 +601,38 @@ function showResults(result) {
 
   markPlayDay();
   $('overlay-results').classList.remove('hidden');
-  announce('Round over. Total score ' + result.score + '.', true);
+  announce(T('Round over. Total score {score}.', { score: result.score }), true);
   $('btn-retry').focus({ preventScroll: true });
   for (const n of [$('overlay-results'), ...$('overlay-results').querySelectorAll('*')]) if (n.scrollTop) n.scrollTop = 0;
+}
+
+// Results text (re-rendered in place on a language change).
+let shownResult = null;
+const END_REASONS = { 'orders-complete': N('All orders served!'), 'time-up': N('Time is up'), 'moves-exhausted': N('Out of moves') };
+function renderResultsText() {
+  if (!shownResult) return;
+  const { result, newAch } = shownResult;
+  $('results-heading').textContent = result.reason === 'orders-complete' ? T('Round Complete') : T('Round Over');
+  $('results-reason').textContent = END_REASONS[result.reason] ? T(END_REASONS[result.reason]) : result.reason;
+  const dl = $('results-breakdown');
+  dl.innerHTML = '';
+  const rows = [
+    [N('Orders served'), result.components.orders],
+    [N('Streak bonuses'), result.components.streaks],
+    [N('Board efficiency'), result.components.efficiency],
+    [N('Dishes served'), result.fulfilled],
+    [N('Best streak'), result.bestStreak],
+    [N('Invalid actions'), result.invalidActions],
+  ];
+  for (const [k, v] of rows) {
+    const dt = document.createElement('dt'); dt.textContent = T(k);
+    const dd = document.createElement('dd'); dd.textContent = String(v);
+    dl.append(dt, dd);
+  }
+  $('results-total').textContent = T('Total: {score}', { score: result.score });
+  $('results-achievements').textContent = newAch.length
+    ? T('Achievement unlocked: {names}', { names: newAch.map((a) => T(a)).join(', ') }) : '';
+  renderLbLine();
 }
 
 // Hosted play only: post a finished journey, daily or challenge round (not
@@ -602,13 +642,23 @@ function postToLeaderboard(total) {
   const line = $('results-lb');
   const round = ++lbRound;
   line.classList.add('hidden');
+  lbState = null;
   if (!platform.hosted || !['journey', 'daily', 'challenge'].includes(currentMode)) return;
-  line.textContent = SH_TEXT.lbPosting;
+  lbState = { pending: true };
+  renderLbLine();
   line.classList.remove('hidden');
   platform.submitScore(total).then((r) => {
     if (round !== lbRound) return;
-    line.textContent = !r.posted ? SH_TEXT.lbFailed : r.rank ? SH_TEXT.lbRank.replace('{rank}', r.rank) : SH_TEXT.lbPosted;
+    lbState = r;
+    renderLbLine();
   });
+}
+let lbState = null;
+function renderLbLine() {
+  const r = lbState;
+  if (!r) return;
+  $('results-lb').textContent = r.pending ? SH_TEXT().lbPosting
+    : !r.posted ? SH_TEXT().lbFailed : r.rank ? SH_TEXT().lbRank.replace('{rank}', r.rank) : SH_TEXT().lbPosted;
 }
 
 function evaluateAchievements(result) {
@@ -630,7 +680,7 @@ function unlock(key) {
     p.achievements[key] = { at: new Date().toISOString(), announced: false };
     store.saveProgress(p);
     const a = ACHIEVEMENTS.find((x) => x.key === key);
-    if (a) toast('Achievement: ' + a.name);
+    if (a) toast(T('Achievement: {name}', { name: T(a.name) }));
   }
 }
 
@@ -647,7 +697,7 @@ function markPlayDay() {
 // ------------------------------------------------------------- screens ----
 function refreshTitle() {
   const p = store.getProgress();
-  $('journey-status').textContent = p.journeyStage > 0 ? 'Stage ' + Math.min(p.journeyStage, 40) + '/40' : '';
+  $('journey-status').textContent = p.journeyStage > 0 ? T('Stage {n}/40', { n: Math.min(p.journeyStage, 40) }) : '';
   $('daily-status').textContent = '';
   $('btn-invite').classList.toggle('hidden', !platform.hosted);
   $('btn-signin').classList.toggle('hidden', !platform.canSignIn());
@@ -655,47 +705,59 @@ function refreshTitle() {
   av.classList.toggle('hidden', !(platform.hosted && platform.avatar));
   if (platform.hosted && platform.avatar && av.src !== platform.avatar) av.src = platform.avatar;
   if (platform.hosted) {
-    $('profile-line').textContent = 'Playing as ' + (platform.nickname || '…') + ' — ' +
-      (SYNC_LABELS[platform.syncState] || 'Signed in.');
+    $('profile-line').textContent = T('Playing as {name} — {status}', {
+      name: platform.nickname || '…',
+      status: SYNC_LABELS[platform.syncState] ? T(SYNC_LABELS[platform.syncState]) : T('Signed in.'),
+    });
   } else {
-    $('profile-line').textContent = 'Guest profile — progress is stored on this device.';
+    $('profile-line').textContent = T('Guest profile — progress is stored on this device.');
   }
 }
 
 function openSetup(level, mode) {
   currentLevel = level;
   currentMode = mode;
-  const fams = level.families.map((f) => FAMILY_NAMES[f]).join(', ');
-  const bits = [];
-  bits.push('<p><strong>' + (level.name || level.id) + '</strong></p>');
-  if (level.blurb) bits.push('<p>' + level.blurb + '</p>');
-  bits.push('<p>Stations: ' + fams + '. Board: ' + (level.cols || 6) + '×' + (level.rows || 6) + '.</p>');
-  const dur = [];
-  if (level.timeLimit != null) dur.push(Math.round(level.timeLimit / 10) + 's time limit');
-  if (level.moveLimit != null) dur.push(level.moveLimit + ' moves');
-  if (level.ordersTarget != null) dur.push('serve ' + level.ordersTarget + ' orders');
-  bits.push('<p>' + (dur.join(' · ') || 'No time pressure') + '</p>');
-  bits.push('<p>' + (mode === 'daily' ? 'Ranked — validated on the daily board.' : mode === 'practice' ? 'Unranked practice. Undo enabled.' : 'Solo progression.') + '</p>');
-  if (mode === 'tutorial') {
-    const t = TUTORIALS.find((x) => x.id === level.tutorialId);
-    bits.push('<p>' + t.brief + '</p>');
-  }
-  $('setup-details').innerHTML = bits.join('');
+  renderSetup();
   show('setup');
 }
 
-function openLearn() {
-  const p = store.getProgress();
-  const items = TUTORIALS.map((t) => ({
-    label: t.title + (p.tutorialsDone.includes(t.id) ? ' ✓' : ''),
-    sub: t.brief.slice(0, 60) + '…',
-    action: () => openSetup({ id: t.id, kind: 'tutorial', seed: hashString(t.id), cols: 6, rows: 6, theme: 'hearth', tutorialId: t.id, ...t.level }, 'tutorial'),
-  }));
-  openList('Learn', items);
+function renderSetup() {
+  const level = currentLevel, mode = currentMode;
+  if (!level) return;
+  const fams = level.families.map(familyName).join(', ');
+  const bits = [];
+  bits.push('<p><strong>' + levelName(level) + '</strong></p>');
+  const blurb = mode === 'tutorial' ? '' : levelBlurb(level);
+  if (blurb) bits.push('<p>' + blurb + '</p>');
+  bits.push('<p>' + T('Stations: {list}. Board: {cols}×{rows}.', { list: fams, cols: level.cols || 6, rows: level.rows || 6 }) + '</p>');
+  const dur = [];
+  if (level.timeLimit != null) dur.push(T('{n}s time limit', { n: Math.round(level.timeLimit / 10) }));
+  if (level.moveLimit != null) dur.push(T('{n} moves', { n: level.moveLimit }));
+  if (level.ordersTarget != null) dur.push(T('serve {n} orders', { n: level.ordersTarget }));
+  bits.push('<p>' + (dur.join(' · ') || T('No time pressure')) + '</p>');
+  bits.push('<p>' + (mode === 'daily' ? T('Ranked — validated on the daily board.') : mode === 'practice' ? T('Unranked practice. Undo enabled.') : T('Solo progression.')) + '</p>');
+  if (mode === 'tutorial') {
+    const t = TUTORIALS.find((x) => x.id === level.tutorialId);
+    bits.push('<p>' + T(t.brief) + '</p>');
+  }
+  $('setup-details').innerHTML = bits.join('');
 }
 
-function openList(title, items) {
-  $('list-heading').textContent = title;
+function openLearn(inPlace) {
+  const p = store.getProgress();
+  const items = TUTORIALS.map((t) => ({
+    label: T(t.title) + (p.tutorialsDone.includes(t.id) ? ' ✓' : ''),
+    sub: T(t.brief).slice(0, 60) + '…',
+    action: () => openSetup({ id: t.id, kind: 'tutorial', seed: hashString(t.id), cols: 6, rows: 6, theme: 'hearth', tutorialId: t.id, ...t.level }, 'tutorial'),
+  }));
+  openList(N('Learn'), items, openLearn, inPlace === true);
+}
+
+// `again` rebuilds the open list in place after a language change.
+let relist = null;
+function openList(title, items, again, inPlace = false) {
+  relist = again || null;
+  $('list-heading').textContent = T(title);
   const box = $('list-items');
   box.innerHTML = '';
   for (const it of items) {
@@ -706,37 +768,38 @@ function openList(title, items) {
     b.addEventListener('click', it.action);
     box.appendChild(b);
   }
-  show('list');
+  if (!inPlace) show('list');
 }
 
-function openJourney() {
+function openJourney(inPlace) {
   const p = store.getProgress();
   const items = JOURNEY_LEVELS.map((l) => {
     const locked = l.stage > Math.max(1, p.journeyStage);
     const stars = p.stars[l.stage] || 0;
     return {
-      label: (l.mastery ? '★ ' : '') + l.name + (stars ? ' ' + '★'.repeat(stars) : ''),
-      sub: locked ? 'Locked' : l.blurb,
+      label: (l.mastery ? '★ ' : '') + levelName(l) + (stars ? ' ' + '★'.repeat(stars) : ''),
+      sub: locked ? T('Locked') : levelBlurb(l),
       locked,
       action: () => openSetup(l, 'journey'),
     };
   });
-  openList('Journey', items);
+  openList(N('Journey'), items, openJourney, inPlace === true);
 }
 
-function openPractice() {
-  openList('Practice', ['relaxed', 'standard', 'intense'].map((d) => ({
-    label: d[0].toUpperCase() + d.slice(1),
-    sub: { relaxed: 'No timer, two stations', standard: 'Five minutes, three stations', intense: 'Fast orders, all stations' }[d],
+const PRACTICE_SUBS = { relaxed: N('No timer, two stations'), standard: N('Five minutes, three stations'), intense: N('Fast orders, all stations') };
+function openPractice(inPlace) {
+  openList(N('Practice'), ['relaxed', 'standard', 'intense'].map((d) => ({
+    label: T(PRACTICE_LABELS[d]),
+    sub: T(PRACTICE_SUBS[d]),
     action: () => openSetup(practiceLevel(d), 'practice'),
-  })));
+  })), openPractice, inPlace === true);
 }
 
-function openChallenges() {
-  openList('Challenges', CHALLENGES.map((c) => ({
-    label: c.name, sub: c.blurb,
+function openChallenges(inPlace) {
+  openList(N('Challenges'), CHALLENGES.map((c) => ({
+    label: T(c.name), sub: T(c.blurb),
     action: () => openSetup(c.level, 'challenge'),
-  })));
+  })), openChallenges, inPlace === true);
 }
 
 async function openDaily() {
@@ -745,6 +808,7 @@ async function openDaily() {
   openSetup(level, 'daily');
 }
 
+let scoresView = 'local';
 async function openScores() {
   renderLocalScores();
   show('scores');
@@ -778,9 +842,10 @@ function renderLocalScores() {
   const box = $('scores-list');
   const ids = Object.keys(all).sort();
   box.innerHTML = '';
-  if (!ids.length) { box.innerHTML = '<p class="muted">No scores yet — play a round!</p>'; return; }
+  scoresView = 'local';
+  if (!ids.length) { box.innerHTML = '<p class="muted">' + T('No scores yet — play a round!') + '</p>'; return; }
   for (const id of ids) {
-    renderScoreTable(box, [id, 'Score', 'Served', 'When'],
+    renderScoreTable(box, [id, T('Score'), T('Served'), T('When')],
       all[id].slice(0, 5).map((e) => [String(e.sessionId).slice(0, 6), e.score, e.fulfilled, String(e.date).slice(0, 10)]));
   }
 }
@@ -790,8 +855,9 @@ function renderGlobalScores() {
   let scores = [];
   try { scores = JSON.parse(box.dataset.global || '[]'); } catch {}
   box.innerHTML = '';
-  if (!scores.length) { box.innerHTML = '<p class="muted">No global scores available (offline or empty board).</p>'; return; }
-  renderScoreTable(box, ['#', 'Player', 'Score', 'Validated'],
+  scoresView = 'global';
+  if (!scores.length) { box.innerHTML = '<p class="muted">' + T('No global scores available (offline or empty board).') + '</p>'; return; }
+  renderScoreTable(box, ['#', T('Player'), T('Score'), T('Validated')],
     scores.map((e) => [e.rank, e.name, e.score, e.validated == null ? '—' : e.validated]));
 }
 
@@ -802,7 +868,7 @@ function openPause() {
   lastFocus = document.activeElement;
   $('overlay-pause').classList.remove('hidden');
   $('btn-resume').focus({ preventScroll: true });
-  announce('Paused.');
+  announce(T('Paused.'));
 }
 
 function closePause() {
@@ -927,9 +993,9 @@ function wire() {
     }
   });
   $('btn-daily').addEventListener('click', openDaily);
-  $('btn-journey').addEventListener('click', openJourney);
-  $('btn-practice').addEventListener('click', openPractice);
-  $('btn-challenge').addEventListener('click', openChallenges);
+  $('btn-journey').addEventListener('click', () => openJourney());
+  $('btn-practice').addEventListener('click', () => openPractice());
+  $('btn-challenge').addEventListener('click', () => openChallenges());
   $('btn-scores').addEventListener('click', openScores);
   $('btn-help').addEventListener('click', () => { helpReturn = 'title'; show('help'); });
   $('btn-settings').addEventListener('click', () => { settingsReturn = 'title'; show('settings'); });
@@ -954,7 +1020,7 @@ function wire() {
     const c = session.state.board[selectedCell];
     if (!c || c.kind !== 'item') return;
     const order = session.state.orders.find((o) => o.family === c.family && o.tier === c.tier);
-    if (!order) { explain('No waiting order matches this dish.'); return; }
+    if (!order) { explain(N('No waiting order matches this dish.')); return; }
     const res = session.command({ kind: 'submit', cell: selectedCell, order: order.id });
     if (res.ok) setSelected(null);
     else explain(res.reason);
@@ -966,7 +1032,7 @@ function wire() {
     else explain(res.reason);
   });
   $('btn-undo').addEventListener('click', () => {
-    if (session && session.undo()) { audio.play('ack', 7); announce('Undone.'); }
+    if (session && session.undo()) { audio.play('ack', 7); announce(T('Undone.')); }
   });
   $('btn-hint').addEventListener('click', () => {
     if (!session) return;
@@ -979,8 +1045,8 @@ function wire() {
       if (h.action.cell != null) hintCells.push(h.action.cell);
     }
     updateBoardDom();
-    toast(h.text);
-    announce(h.text);
+    toast(T(h.text));
+    announce(T(h.text));
     setTimeout(() => { hintCells = []; updateBoardDom(); }, 3000);
   });
 
@@ -1015,6 +1081,33 @@ function wire() {
   window.addEventListener('orientationchange', () => setTimeout(() => { fitBoard(); if (renderer && renderer.ok) renderer.resize(); }, 100));
 }
 
+// ------------------------------------------------------------ language ----
+// Settings › Language (or the account preference arriving) changed the game
+// language: data-i18n markup is already re-applied; re-render everything built
+// in code in place. The round, its timer and the selection are untouched.
+function relocalize() {
+  $('btn-signin').textContent = SH_TEXT().signIn;
+  $('btn-invite').textContent = SH_TEXT().invite;
+  $('set-theme').querySelectorAll('option').forEach((o) => {
+    const t = THEMES.find((x) => x.id === o.value);
+    if (t) o.textContent = T(t.name);
+  });
+  if (gfxPanel) gfxPanel.relabel();
+  renderControlsHelp();
+  refreshTitle();
+  if (!$('screen-list').classList.contains('hidden') && relist) relist(true);
+  if (!$('screen-setup').classList.contains('hidden')) renderSetup();
+  if (!$('screen-scores').classList.contains('hidden')) (scoresView === 'global' ? renderGlobalScores : renderLocalScores)();
+  if (session) {
+    $('hud-objective').textContent = objectiveText(currentLevel);
+    for (const c of $('board-dom').children) delete c.dataset.view; // force label rebuild
+    updateBoardDom();
+    updateHud();
+    if (explained) $('action-explain').textContent = T(explained);
+  }
+  if (!$('overlay-results').classList.contains('hidden')) renderResultsText();
+}
+
 // --------------------------------------------------------------- boot ----
 async function boot() {
   bindSettings();
@@ -1026,13 +1119,14 @@ async function boot() {
   platform.loadBindings(DEFAULT_BINDINGS).then((b) => { bindings = b; renderControlsHelp(); });
 
   // StarHermit account buttons on the title.
-  $('btn-signin').textContent = SH_TEXT.signIn;
+  $('btn-signin').textContent = SH_TEXT().signIn;
   $('btn-signin').addEventListener('click', () => platform.signIn());
-  $('btn-invite').textContent = SH_TEXT.invite;
+  $('btn-invite').textContent = SH_TEXT().invite;
+  onLanguage(relocalize);
   $('btn-invite').addEventListener('click', () => {
     const link = platform.inviteLink();
     if (!link) return;
-    const done = (ok) => toast(ok ? SH_TEXT.copied : SH_TEXT.copyFailed.replace('{link}', link), 4000);
+    const done = (ok) => toast(ok ? SH_TEXT().copied : SH_TEXT().copyFailed.replace('{link}', link), 4000);
     try { navigator.clipboard.writeText(link).then(() => done(true), () => done(false)); } catch { done(false); }
   });
 

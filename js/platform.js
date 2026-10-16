@@ -7,6 +7,45 @@
 // and the read-only leaderboard. Hosted mode = the SDK holds a token; without
 // one no platform call is made.
 
+// Another device saved since this one last loaded the slot: keep the better of
+// each side's progress (furthest journey stage, best stars, every lesson,
+// achievement, play day and mastery stage) and both score tables, and keep this
+// device's settings (they are the ones the player is looking at).
+export function mergeDocs(remote, local) {
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const union = (a, b) => [...new Set([...arr(a), ...arr(b)])];
+  const r = obj(remote), l = obj(local);
+  const rp = obj(r.progress), lp = obj(l.progress);
+  const stars = { ...obj(rp.stars) };
+  for (const [k, v] of Object.entries(obj(lp.stars))) stars[k] = Math.max(Number(stars[k]) || 0, Number(v) || 0);
+  const achievements = { ...obj(rp.achievements) };
+  for (const [k, v] of Object.entries(obj(lp.achievements))) {
+    const o = achievements[k];
+    achievements[k] = !o ? v : { ...o, at: String(o.at) < String(v && v.at) ? o.at : (v && v.at) || o.at, announced: !!(o.announced || (v && v.announced)) };
+  }
+  const masteryStages = union(rp.masteryStages, lp.masteryStages);
+  const progress = {
+    ...rp, ...lp,
+    journeyStage: Math.max(Number(rp.journeyStage) || 0, Number(lp.journeyStage) || 0),
+    stars, achievements,
+    tutorialsDone: union(rp.tutorialsDone, lp.tutorialsDone),
+    playDays: union(rp.playDays, lp.playDays),
+    masteryStages,
+    masteryDone: Math.max(Number(rp.masteryDone) || 0, Number(lp.masteryDone) || 0, masteryStages.length),
+  };
+  const scores = {};
+  const rs = obj(r.scores), ls = obj(l.scores);
+  for (const id of new Set([...Object.keys(rs), ...Object.keys(ls)])) {
+    const seen = new Set();
+    scores[id] = [...arr(rs[id]), ...arr(ls[id])]
+      .filter((e) => { const key = e && (e.sessionId || JSON.stringify(e)); if (!e || seen.has(key)) return false; seen.add(key); return true; })
+      .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0))
+      .slice(0, 20);
+  }
+  return { version: 1, savedAt: new Date().toISOString(), settings: l.settings && typeof l.settings === 'object' ? l.settings : obj(r.settings), progress, scores };
+}
+
 export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
   const platform = {
     sh: sh || null,
@@ -29,6 +68,9 @@ export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
       if (!this.sh) return this;
       this.sh.init();
       this.sh.on('saved', (ok) => this.setSync(ok ? 'synced' : 'error'));
+      // The SDK refused a write because another device saved first: reload,
+      // merge both sides, adopt the result and save it (conditional again).
+      this.sh.on('saveconflict', () => this.resolveConflict());
       this.sh.on('auth', (a) => {
         if (!a.signedIn) { this.nickname = null; this.avatar = null; this.syncState = 'offline'; }
         if (hooks.onAuth) hooks.onAuth(a.signedIn);
@@ -120,6 +162,18 @@ export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
       this.adoptRemote(doc);
       this.setSync('synced');
     },
+    async resolveConflict() {
+      if (!this.hosted) return;
+      this.setSync('saving');
+      let remote = null;
+      try { remote = await this.sh.loadJSON(); } catch { remote = null; }
+      // A failed read is not an empty slot: keep local progress and stay blocked.
+      if (this.sh.saveLoadFailed() || this.sh.saveConflicted()) { this.setSync('error'); return; }
+      const merged = mergeDocs(remote, this.buildSaveDoc());
+      this.adoptRemote(merged);
+      this._lastSig = null;
+      this.scheduleCloudPush();
+    },
     adoptRemote(doc) {
       this._adopting = true;
       try {
@@ -137,7 +191,16 @@ export function createPlatform({ sh, store, lsSet, hooks = {} } = {}) {
     },
 
     // --------------------------------------- settings KV, controls, invite ----
-    getSettings() { return this.hosted ? this.sh.getSettings() : Promise.resolve({}); },
+    // The per-player KV also holds keys owned by shared modules (`ui.language`,
+    // written by sh-language.js); the game adopts and patches only its own.
+    getSettings() {
+      if (!this.hosted) return Promise.resolve({});
+      return this.sh.getSettings().then((all) => {
+        const own = {};
+        for (const [k, v] of Object.entries(all || {})) if (!k.startsWith('ui.')) own[k] = v;
+        return own;
+      });
+    },
     patchSettings(obj) { if (this.hosted) this.sh.patchSettings(obj); },
     loadBindings(defaults) {
       return this.hosted ? this.sh.loadBindings(defaults) : Promise.resolve(JSON.parse(JSON.stringify(defaults)));
