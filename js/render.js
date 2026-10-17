@@ -14,7 +14,7 @@ import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { THEMES } from './content.js';
-import { detectPreset, describe, resolve, SHADOW_MAP, PARTICLE_POOL } from './gfx.js';
+import { detectLevel, presetForLevel, describe, resolve, SHADOW_MAP, particlePool } from './gfx.js';
 
 const FAMILY_COLORS = {
   grain: 0xd9b36a,
@@ -31,20 +31,23 @@ const FAMILY_COLORS_CB = {
   ember: 0xcc6677,
 };
 
+// Geometry LOD: segment counts scaled by the preset budget (`segments`), never below `min`.
+function seg(n, k, min = 3) { return Math.max(min, Math.round(n * (k || 1))); }
+
 // Family silhouettes: each family has a distinct procedural shape so color
-// is never the only differentiator.
-function familyGeometry(family, tier) {
+// is never the only differentiator. `k` is the preset's geometry LOD.
+function familyGeometry(family, tier, k = 1) {
   switch (family) {
     case 'grain': {
-      const g = new THREE.CapsuleGeometry(0.16 + tier * 0.03, 0.18 + tier * 0.05, 4, 10);
+      const g = new THREE.CapsuleGeometry(0.16 + tier * 0.03, 0.18 + tier * 0.05, seg(4, k, 2), seg(10, k, 6));
       g.rotateZ(Math.PI / 2);
       return g;
     }
     case 'garden': {
-      return new THREE.IcosahedronGeometry(0.16 + tier * 0.045, 1);
+      return new THREE.IcosahedronGeometry(0.16 + tier * 0.045, k >= 1.5 ? 2 : 1);
     }
     case 'dairy': {
-      return new THREE.CylinderGeometry(0.13 + tier * 0.03, 0.17 + tier * 0.03, 0.16 + tier * 0.06, 14);
+      return new THREE.CylinderGeometry(0.13 + tier * 0.03, 0.17 + tier * 0.03, 0.16 + tier * 0.06, seg(14, k, 8));
     }
     case 'ember': {
       return new THREE.ConeGeometry(0.16 + tier * 0.04, 0.3 + tier * 0.08, 8);
@@ -96,8 +99,11 @@ function canvasTexture(size, draw, repeat = 1) {
 }
 
 // Butcher-block wood: long streaky grain with a few darker growth lines.
-function woodTexture() {
-  return canvasTexture(512, (g, n) => {
+// Drawn in 512-px units at the preset budget's size `size`.
+function woodTexture(size = 512) {
+  return canvasTexture(size, (g, px) => {
+    const n = 512;
+    g.scale(px / n, px / n);
     const r = rng(7);
     g.fillStyle = '#d8c2a6'; g.fillRect(0, 0, n, n);
     for (let i = 0; i < 260; i++) {
@@ -116,8 +122,11 @@ function woodTexture() {
 }
 
 // Glazed ceramic tile: soft speckle and a slightly darker rim.
-function tileTexture() {
-  return canvasTexture(128, (g, n) => {
+// Drawn in 128-px units at the preset budget's size `size`.
+function tileTexture(size = 128) {
+  return canvasTexture(size, (g, px) => {
+    const n = 128;
+    g.scale(px / n, px / n);
     const r = rng(11);
     g.fillStyle = '#ece4d8'; g.fillRect(0, 0, n, n);
     for (let i = 0; i < 700; i++) {
@@ -141,6 +150,15 @@ function dotTexture() {
   });
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
+}
+
+// Run a post pass at a fraction of the frame (per-preset budget). EffectComposer sizes every pass to the
+// full frame in addPass/setSize, so the pass's own setSize is wrapped to apply the scale.
+function atScale(pass, k) {
+  if (!(k > 0 && k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
 }
 
 function detectMobile() {
@@ -187,8 +205,12 @@ export class KitchenRenderer {
     this.renderer = renderer;
 
     this.gpu = this._gpuName();
-    this.mobile = detectMobile();
-    this.detected = detectPreset(this.gpu, { mobile: this.mobile });
+    // StarHermit hardware level → Auto preset (SwiftShader = level 0 → Low; phones cap at Balanced).
+    const G = globalThis.StarHermitGpu;
+    const system = G ? G.detectSystem() : {};
+    this.mobile = !!system.mobile || detectMobile();
+    this.level = detectLevel(this.gpu, { ...system, mobile: this.mobile });
+    this.detected = presetForLevel(this.level);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x1d1512);
@@ -241,17 +263,8 @@ export class KitchenRenderer {
 
     this._pGeo = new THREE.SphereGeometry(0.05, 6, 6);
 
-    // Ambient dust motes drifting through the lamp light.
-    const motes = 40;
-    const pos = new Float32Array(motes * 3);
-    const r = rng(3);
-    this._moteSeed = [];
-    for (let i = 0; i < motes; i++) {
-      this._moteSeed.push({ x: (r() - 0.5) * 7, y: 0.8 + r() * 1.6, z: (r() - 0.5) * 7, p: r() * Math.PI * 2, s: 0.2 + r() * 0.5 });
-    }
-    const mg = new THREE.BufferGeometry();
-    mg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.motes = new THREE.Points(mg, new THREE.PointsMaterial({
+    // Ambient dust motes drifting through the lamp light (count = preset budget's `motes`).
+    this.motes = new THREE.Points(this._moteGeometry(40), new THREE.PointsMaterial({
       map: dotTexture(), color: 0xffd8a0, size: 0.09, transparent: true, opacity: 0.55,
       depthWrite: false, blending: THREE.AdditiveBlending,
     }));
@@ -265,6 +278,17 @@ export class KitchenRenderer {
     this.setGraphics(graphics);
     this.setTheme('hearth');
     this._resize();
+  }
+
+  _moteGeometry(count) {
+    const r = rng(3);
+    this._moteSeed = [];
+    for (let i = 0; i < count; i++) {
+      this._moteSeed.push({ x: (r() - 0.5) * 7, y: 0.8 + r() * 1.6, z: (r() - 0.5) * 7, p: r() * Math.PI * 2, s: 0.2 + r() * 0.5 });
+    }
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+    return mg;
   }
 
   _gpuName() {
@@ -287,7 +311,7 @@ export class KitchenRenderer {
     if (json === this._gfxJson) return;
     this._gfxJson = json;
     const prev = this.q;
-    const g = resolve(saved || {}, this.detected);
+    const g = resolve(saved || {}, this.detected, this.level);
     this.q = g;
     if (!this.renderer) return;
 
@@ -318,11 +342,14 @@ export class KitchenRenderer {
       this.fill.intensity = 0.7;
     }
 
-    // Particle pool size.
-    if (!prev || prev.particles !== g.particles) this._buildParticles(PARTICLE_POOL[g.particles]);
+    // Particle pool size (Particles tier × the budget's sparks factor).
+    const pb = (prev && prev.budget) || {}, b = g.budget;
+    if (!prev || prev.particles !== g.particles || pb.sparks !== b.sparks) this._buildParticles(particlePool(g.particles, b));
+    if (pb.motes !== b.motes) { this.motes.geometry.dispose(); this.motes.geometry = this._moteGeometry(b.motes); }
 
-    // Detail: surround props, procedural textures and physical materials.
-    if (prev && prev.detail !== g.detail) this._rebuildForDetail();
+    // Detail and budget: surround props, procedural texture sizes, geometry LOD and material class.
+    if (pb.wood !== b.wood || pb.tile !== b.tile) this._disposeTextures();
+    if (prev && (prev.detail !== g.detail || pb.material !== b.material || pb.segments !== b.segments || pb.wood !== b.wood || pb.tile !== b.tile)) this._rebuildForDetail();
 
     this._applyMotion();
     this.adaptiveScale = 1;
@@ -345,6 +372,7 @@ export class KitchenRenderer {
     const px = [Math.round(this.size[0] * this.pixelRatio), Math.round(this.size[1] * this.pixelRatio)];
     return {
       gpu: this.gpu || 'unknown GPU',
+      level: this.level,
       detected: this.detected,
       resolved: this.q,
       summary: describe(this.q, px[0] ? px : null, words),
@@ -401,8 +429,30 @@ export class KitchenRenderer {
   _detailed() { return this.q && this.q.detail === 'detailed'; }
 
   _tex() {
-    if (!this.textures) this.textures = { wood: woodTexture(), tile: tileTexture() };
+    const b = this.q.budget;
+    if (!this.textures) this.textures = { wood: woodTexture(b.wood), tile: tileTexture(b.tile) };
     return this.textures;
+  }
+
+  _disposeTextures() {
+    if (!this.textures) return;
+    this.textures.wood.dispose();
+    this.textures.tile.dispose();
+    this.textures = null;
+  }
+
+  _budget() { return (this.q && this.q.budget) || { material: 'standard', segments: 1, sparks: 1 }; }
+
+  // Material class per budget: Lambert on Low, Standard on Balanced, Physical (where Scene detail asks for
+  // it) on High/Ultra. `std` holds MeshStandardMaterial parameters; `phys` the extra Physical ones.
+  _mat(std, phys) {
+    const kind = this._budget().material;
+    if (kind === 'lambert') {
+      const { roughness, metalness, bumpMap, bumpScale, ...rest } = std;
+      return new THREE.MeshLambertMaterial(rest);
+    }
+    if (kind === 'physical' && phys) return new THREE.MeshPhysicalMaterial({ ...std, ...phys });
+    return new THREE.MeshStandardMaterial(std);
   }
 
   _rebuildForDetail() {
@@ -417,7 +467,8 @@ export class KitchenRenderer {
 
   setTheme(themeId) {
     const t = THEMES.find((x) => x.id === themeId) || THEMES[0];
-    const key = t.id + '|' + (this.q && this.q.detail);
+    const b = this._budget();
+    const key = [t.id, this.q && this.q.detail, b.material, b.segments, b.wood].join('|');
     this.theme = t;
     if (key === this._themeKey) return; // settings changed elsewhere: nothing to rebuild
     this._themeKey = key;
@@ -425,12 +476,17 @@ export class KitchenRenderer {
     this.key.color.set(t.key);
     this.fill.color.set(t.fill);
     if (!this.floor) {
-      this.floor = new THREE.Mesh(
-        new THREE.CylinderGeometry(6.5, 7, 0.3, 48),
-        new THREE.MeshStandardMaterial({ color: t.floor, roughness: 0.9 }));
+      this.floor = new THREE.Mesh(undefined, undefined);
       this.floor.position.y = -0.55;
       this.floor.receiveShadow = true;
       this.scene.add(this.floor);
+    }
+    if (this.floor.userData.key !== key) {
+      this.floor.userData.key = key;
+      if (this.floor.userData.built) { this.floor.geometry.dispose(); this.floor.material.dispose(); }
+      this.floor.userData.built = true;
+      this.floor.geometry = new THREE.CylinderGeometry(6.5, 7, 0.3, seg(48, b.segments, 16));
+      this.floor.material = this._mat({ color: t.floor, roughness: 0.9 });
     }
     this.floor.material.color.set(t.floor);
     this._buildSurround();
@@ -443,10 +499,11 @@ export class KitchenRenderer {
     if (this.envGroup) { this.scene.remove(this.envGroup); this._disposeGroup(this.envGroup); }
     const detailed = this._detailed();
     this.envGroup = new THREE.Group();
+    const k = this._budget().segments;
     const wood = detailed
-      ? new THREE.MeshStandardMaterial({ color: 0x967660, roughness: 0.72, map: this._tex().wood, bumpMap: this._tex().wood, bumpScale: 0.6 })
-      : new THREE.MeshStandardMaterial({ color: 0x6a4c32, roughness: 0.85 });
-    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa2ad, roughness: 0.3, metalness: 0.85 });
+      ? this._mat({ color: 0x967660, roughness: 0.72, map: this._tex().wood, bumpMap: this._tex().wood, bumpScale: 0.6 })
+      : this._mat({ color: 0x6a4c32, roughness: 0.85 });
+    const steel = this._mat({ color: 0x9aa2ad, roughness: 0.3, metalness: 0.85 });
     const counter = new THREE.Mesh(new THREE.BoxGeometry(11, 0.4, 8.4), wood);
     counter.position.y = -0.35;
     counter.receiveShadow = true;
@@ -457,7 +514,7 @@ export class KitchenRenderer {
       shelf.position.set(-2.5, 2.2, -4.2);
       this.envGroup.add(shelf);
       for (let i = 0; i < 3; i++) {
-        const pan = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.3, 0.12, 24), steel);
+        const pan = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.3, 0.12, seg(24, k, 8)), steel);
         pan.position.set(-4 + i * 1.2, 1.6, -4.2);
         pan.castShadow = true;
         this.envGroup.add(pan);
@@ -468,12 +525,12 @@ export class KitchenRenderer {
       win.position.set(3, 2.4, -4.4);
       this.envGroup.add(win);
       // Copper utensil rail and a salt cellar along the counter edges.
-      const copper = new THREE.MeshStandardMaterial({ color: 0xc27a4a, roughness: 0.28, metalness: 0.9 });
-      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 7.5, 12), copper);
+      const copper = this._mat({ color: 0xc27a4a, roughness: 0.28, metalness: 0.9 });
+      const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 7.5, seg(12, k, 6)), copper);
       rail.rotation.z = Math.PI / 2;
       rail.position.set(0, 0.02, 4.0);
       this.envGroup.add(rail);
-      const cellar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.28, 24), new THREE.MeshPhysicalMaterial({ color: 0x4f5f6c, roughness: 0.4, clearcoat: 0.6 }));
+      const cellar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.26, 0.28, seg(24, k, 8)), this._mat({ color: 0x4f5f6c, roughness: 0.4 }, { clearcoat: 0.6 }));
       cellar.position.set(-4.6, 0, 3.4);
       cellar.castShadow = true;
       this.envGroup.add(cellar);
@@ -492,16 +549,18 @@ export class KitchenRenderer {
     // Grout slab under the tiles.
     this.boardBase = new THREE.Mesh(
       new THREE.BoxGeometry(cols * 1.05 + 0.2, 0.1, rows * 1.05 + 0.2),
-      new THREE.MeshStandardMaterial({ color: new THREE.Color(this.theme.board).multiplyScalar(0.45), roughness: 0.95 }));
+      this._mat({ color: new THREE.Color(this.theme.board).multiplyScalar(0.45), roughness: 0.95 }));
     this.boardBase.position.y = -0.14;
     this.boardBase.receiveShadow = true;
     this.boardGroup.add(this.boardBase);
-    const tileGeo = detailed ? new RoundedBoxGeometry(0.94, 0.12, 0.94, 3, 0.05) : new THREE.BoxGeometry(0.92, 0.1, 0.92);
+    const k = this._budget().segments;
+    // Rounded tile bevels follow the geometry LOD (1 bevel segment on Low, 4 on Ultra).
+    const tileGeo = detailed ? new RoundedBoxGeometry(0.94, 0.12, 0.94, seg(3, k, 1), 0.05) : new THREE.BoxGeometry(0.92, 0.1, 0.92);
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const mat = detailed
-          ? new THREE.MeshPhysicalMaterial({ color: this.theme.board, roughness: 0.55, clearcoat: 0.35, clearcoatRoughness: 0.4, map: this._tex().tile })
-          : new THREE.MeshStandardMaterial({ color: this.theme.board, roughness: 0.8 });
+          ? this._mat({ color: this.theme.board, roughness: 0.55, map: this._tex().tile }, { clearcoat: 0.35, clearcoatRoughness: 0.4 })
+          : this._mat({ color: this.theme.board, roughness: 0.8 });
         const m = new THREE.Mesh(tileGeo, mat);
         const { x, z } = this.cellPos(r * cols + c);
         m.position.set(x, -0.05, z);
@@ -565,17 +624,17 @@ export class KitchenRenderer {
 
   _itemMaterial(color, extra = {}) {
     if (this._detailed()) {
-      // Glazed, clay-like props: clearcoat catches the lamp and environment.
-      return new THREE.MeshPhysicalMaterial({
-        color, roughness: 0.48, metalness: 0.0, clearcoat: 0.7, clearcoatRoughness: 0.28,
-        sheen: 0.3, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.6, ...extra,
+      // Glazed, clay-like props: clearcoat catches the lamp and environment (Physical budget only).
+      return this._mat({ color, roughness: 0.48, metalness: 0.0, ...extra }, {
+        clearcoat: 0.7, clearcoatRoughness: 0.28, sheen: 0.3, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.6,
       });
     }
-    return new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, ...extra });
+    return this._mat({ color, roughness: 0.55, metalness: 0.05, ...extra });
   }
 
   _makeItem(cell, colors) {
-    const geo = familyGeometry(cell.family, cell.tier);
+    const k = this._budget().segments;
+    const geo = familyGeometry(cell.family, cell.tier, k);
     const mat = this._itemMaterial(colors[cell.family], {
       emissive: colors[cell.family],
       emissiveIntensity: cell.tier >= 5 ? 0.45 : cell.tier >= 4 ? 0.25 : 0.05,
@@ -586,8 +645,8 @@ export class KitchenRenderer {
     // Tier marker ring under higher tiers (shape cue, not color-only).
     if (cell.tier >= 3) {
       const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(0.3, 0.03, 8, 28),
-        new THREE.MeshStandardMaterial({ color: 0xf2d38a, roughness: 0.25, metalness: 0.9 }));
+        new THREE.TorusGeometry(0.3, 0.03, seg(8, k, 4), seg(28, k, 12)),
+        this._mat({ color: 0xf2d38a, roughness: 0.25, metalness: 0.9 }));
       ring.rotation.x = -Math.PI / 2;
       ring.position.y = -0.28;
       ring.castShadow = true;
@@ -599,16 +658,17 @@ export class KitchenRenderer {
   _makeGenerator(i, family, colors) {
     const g = new THREE.Group();
     const detailed = this._detailed();
+    const k = this._budget().segments;
     const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.42, 0.48, 0.3, detailed ? 32 : 12),
+      new THREE.CylinderGeometry(0.42, 0.48, 0.3, detailed ? seg(32, k, 12) : 12),
       detailed
-        ? new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.6, map: this._tex().wood })
-        : new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.7 }));
+        ? this._mat({ color: 0x8a6a4a, roughness: 0.6, map: this._tex().wood })
+        : this._mat({ color: 0x5a4632, roughness: 0.7 }));
     base.castShadow = true;
     base.receiveShadow = true;
     // Glowing station item: emissive above the bloom threshold.
     const top = new THREE.Mesh(
-      familyGeometry(family, 1),
+      familyGeometry(family, 1, k),
       this._itemMaterial(colors[family], { emissive: colors[family], emissiveIntensity: 0.3 }));
     top.position.y = 0.35;
     top.castShadow = true;
@@ -638,6 +698,7 @@ export class KitchenRenderer {
   // Bounded burst effect at a cell (merge/submit tier events).
   burst(cellIndex, color = 0xffe28a, count = 14) {
     if (this.reducedMotion || !this.ok) return;
+    count = Math.max(1, Math.round(count * this._budget().sparks)); // preset budget `sparks`
     const { x, z } = this.cellPos(cellIndex);
     let spawned = 0;
     for (const p of this.particlePool) {
@@ -729,7 +790,7 @@ export class KitchenRenderer {
       composer.setSize(w, h);
       composer.addPass(new RenderPass(this.scene, this.camera));
       if (g.ao !== 'off') {
-        const ao = new GTAOPass(this.scene, this.camera, pw, ph);
+        const ao = atScale(new GTAOPass(this.scene, this.camera, pw, ph), g.budget.aoRes);
         ao.output = GTAOPass.OUTPUT.Default;
         ao.blendIntensity = 0.75;
         const hi = g.ao === 'high';
@@ -746,7 +807,7 @@ export class KitchenRenderer {
       }
       if (g.bloom === 'on') {
         // High threshold: only glowing stations, rings, sparks and the window bloom.
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.4, 0.35, 0.9));
+        composer.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.4, 0.35, 0.9), g.budget.bloomRes));
       }
       if (g.grade === 'on') composer.addPass(new ShaderPass(GradeShader));
       composer.addPass(new OutputPass());

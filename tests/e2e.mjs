@@ -172,6 +172,9 @@ async function runPass(browser, pass, viewport, hasTouch) {
     await page.click('#btn-settings');
     await page.waitForSelector(visible('#screen-settings'));
     if ((await preset()) !== 'low') throw new Error('Auto on a software GPU should resolve to low, got ' + (await preset()));
+    // The summary names the StarHermit hardware level (software GPU = level 0).
+    const sum = await page.textContent('#gfx-summary');
+    if (!/Level 0/.test(sum)) throw new Error('summary lacks the hardware level: ' + sum);
     await page.selectOption('#set-tier', 'low');
     if ((await preset()) !== 'low') throw new Error('Low not applied');
     await page.selectOption('#set-tier', 'high');

@@ -30,7 +30,8 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | `js/content.js` | Versioned content: themes, 3 tutorials, 40 Journey stages, daily generator, practice difficulties, 4 challenges, achievements, validators. |
 | `js/session.js` | Round controller: tick loop, undo stack, replay recording, `localStorage` persistence (`store`). |
 | `js/render.js` | `KitchenRenderer` — Three.js scene, family silhouettes, procedural textures, lighting and shadows, post-processing chain, adaptive resolution, particle pool, ambient motion, camera shake. |
-| `js/gfx.js` | Pure graphics quality model: presets, categories, GPU detection (`detectPreset`), `resolve`, `presetTier`, `applyPreset`, `describe`. |
+| `js/gfx.js` | Pure graphics quality model: presets, categories, per-preset budgets (`BUDGETS`, `budget`, `particlePool`), hardware level → preset (`LEVELS`, `detectLevel`, `presetForLevel`, `detectPreset`), `resolve`, `presetTier`, `applyPreset`, `describe`. |
+| `js/gpu-level.js` | Shared StarHermit hardware-level detector (`window.StarHermitGpu`; copy of the canonical tools file, not edited here). |
 | `js/i18n.js`, `js/locales/` | Localization core (`T`, `N`, `setLocale`, `onLanguage`, `applyMarkup`) and the per-locale catalogues keyed by the US-English text. |
 | `js/sh-language.js` | Shared StarHermit language preference (`window.StarHermitLanguage`), an unmodified copy of `tools/sh-language.js`, loaded in `<head>`. |
 | `game-options.js` | Shared Sound / frame-rate / Language / Report-a-problem sections, an unmodified copy of `tools/game-options.js`. |
@@ -360,10 +361,10 @@ stops the ambient motion below; nothing is communicated by motion alone.
 frustum is fitted to the board, a hemisphere fill, and (with reflections on) a
 `RoomEnvironment` studio map through `PMREMGenerator` as `scene.environment`; output is sRGB
 with ACES filmic tone mapping. With detailed scene detail, tiles are rounded glazed ceramic
-(`MeshPhysicalMaterial` with clearcoat and a procedural speckle texture) on a darker grout
+(clearcoated where the preset's material class is Physical, with a procedural speckle texture) on a darker grout
 slab, the counter and station bases use a procedural butcher-block wood texture with bump,
-and items and station tops are clearcoated clay (plain detail keeps the flat standard
-materials). Optional effects: GTAO contact shadows (motes and sparks are excluded from its
+and items and station tops are clearcoated clay on High/Ultra (plain detail keeps flat
+materials; the per-preset material class is below). Optional effects: GTAO contact shadows (motes and sparks are excluded from its
 depth pass), bloom limited to highlights (threshold 0.9: station tops, the selection and
 target rings, sparks, the window glow), a colour grade (gentle S-curve, saturation, warm
 highlights / cool shadows) with vignette, FXAA/SMAA/MSAA anti-aliasing, and ambient motion —
@@ -371,15 +372,13 @@ items breathe, station tops bob, the key light flickers like a hearth, dust mote
 the title card gets a slow lamp-glow. Detailed scene detail also gives menu panels and
 buttons a lit bevel and the title a warm glow (not in high contrast). The 3D view is not
 drawn while the play screen is hidden. **Settings → Graphics** offers Quality (Auto, chosen
-from the WebGL unmasked renderer: software renderers get Low, discrete GPUs and Apple M get
-High, others Balanced, and touch/mobile devices are capped at Balanced; Low; Balanced; High;
-Ultra), a render scale slider (50–200% of the preset's), one select per category defaulting
+from the StarHermit hardware level below; Low; Balanced; High; Ultra), a render scale slider (50–200% of the preset's), one select per category defaulting
 to "From preset (…)" — Shadows (off/1024²/2048²/4096²), Ambient occlusion (off/on/high),
 Bloom, Colour grade, Anti-aliasing (off/FXAA/SMAA/MSAA), Reflections, Scene detail
 (plain/detailed), Particles (low/high), Ambient motion (static/animated) — plus Adaptive
 resolution (on by default: averages 90 frames, steps the resolution down 0.1 to 60% above
 26 ms and back up 0.05 below 14 ms) and Show frame rate (a readout at the bottom-left that
-never takes input). A summary line reads "GPU · cost summary · W×H px", and a note appears
+never takes input). A summary line reads "GPU · Level N · cost summary · W×H px" (the level label localized), and a note appears
 if post-processing cannot be built, in which case the game renders without it. Pixel ratio
 is min(device ratio, preset cap 1/1.5/2/2) × preset scale (Ultra 1.25) × render scale ×
 adaptive scale. Choosing a preset clears the overrides; changes apply immediately and are
@@ -388,6 +387,46 @@ composer runs only when a post effect is on, so Low renders directly with canvas
 body carries `data-gfx-preset` with the resolved preset. The panel's strings exist in
 en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR and it-IT, chosen by `?lang=` or
 `navigator.languages`.
+
+**Hardware level and Auto.** `js/gpu-level.js` (the shared StarHermit detector,
+`window.StarHermitGpu`, loaded as a classic script before `js/main.js`) rates the GPU 0–20
+(0 = Galaxy S20 / Intel UHD or weaker, 20 = RTX 5090, each level ≈ 1.23× the one below;
+laptop parts two levels lower; phones, tablets and ≤ 4 GB machines capped at 9; software
+renderers 0). Auto picks **Low from 0, Balanced from 4, High from 10, Ultra from 17**, so
+strong desktop GPUs get Ultra; adaptive resolution still steps down when frames are slow. On
+phones and tablets the shared frame-rate option paces Auto at half the display refresh rate
+and starts at 16 simultaneous sounds.
+
+**Per-preset budgets** (`BUDGETS` in `js/gfx.js`; each tuned to hold 60 FPS on the weakest GPU
+Auto gives it — Low: level 0 phones / Intel UHD, Balanced: level 4 Iris Xe, High: level 10
+GTX 1070, Ultra: level 17 RTX 4080). Gameplay is identical on every preset.
+
+| Preset | Materials (items, stations, tiles, counter, floor) | Wood / tile texture | Geometry LOD | Dust motes | Sparks (× bursts and pool) | Bloom / GTAO resolution |
+|---|---|---|---|---|---|---|
+| Low | Lambert | 256 / 64 px | ½ (1 bevel segment) | 16 | 0.5× | ½ / ½ |
+| Balanced | Standard | 512 / 128 px | ¾ | 28 | 0.75× | ½ / ½ |
+| High | Physical (clearcoat, sheen) with Scene detail | 512 / 128 px | 1 | 40 | 1× | ½ / ½ |
+| Ultra | Physical (clearcoat, sheen) with Scene detail | 1024 / 256 px | 1.5 (subdivided garden items) | 80 | 1.5× | full / full |
+
+Geometry LOD multiplies the segment counts of ingredients, station bases, tier rings, the
+floor, pans, rail and salt cellar, and the tile bevel. Sparks and motes scale within the
+preset by the hardware level (`StarHermitGpu.scaleBudget`, ≤ 2×; fewer below the floor).
+Textures, LOD geometry, materials, motes and the particle pool are rebuilt when the preset
+changes. Bloom and GTAO run at a fraction of the frame through a wrapped pass `setSize`.
+
+**60 FPS benchmark** (`node tools/gfx-bench.mjs kitchen-merge [--mobile --presets low,balanced]`,
+dev-only, real GPUs; hook `tests/gfx-bench.mjs` picks the preset in Settings → Graphics,
+starts a Relaxed Practice round and keeps spawning, merging and serving through the visible
+board, retrying finished rounds). Measured 2026-10-17 (an AMD Radeon iGPU at level 2 projected
+to each preset's floor level, the same page with draws skipped subtracted; typical p50 ≤ 12 ms
+and slow p90 ≤ 14 ms, CPU p90 ≤ 6 ms on the NVIDIA run):
+
+- Desktop 1920×1080: PASS low (typical 0.00, slow 1.26 ms at level 0; CPU 0.90 ms); PASS
+  balanced (typical 4.19, slow 2.64 ms at level 4; CPU 1.40 ms); PASS high (typical 1.44,
+  slow 1.75 ms at level 10; CPU 1.60 ms); PASS ultra (typical 3.48, slow 4.12 ms at level 17;
+  CPU 1.60 ms).
+- Mobile 390×844 @3×: PASS low (typical 0.00, slow 1.64 ms at level 0; CPU 0.60 ms); PASS
+  balanced (typical 1.85, slow 0.28 ms at level 4; CPU 1.20 ms).
 
 **Visual assets the design calls for.** A title backdrop that shows all four families as a
 single lamp-lit diorama (so the fantasy lands before any text is read), and a results wash
@@ -577,7 +616,7 @@ offline cache.
 
 **Performance budgets.** Graphics presets cap device pixel ratio at 1 / 1.5 / 2 / 2, toggle
 shadows, post effects, reflections and surround detail, and size the particle pool at 60 or
-300; adaptive resolution trims the pixel ratio when frames run long (§8 Graphics). Geometry and materials are
+300 × the budget's sparks factor, with per-preset material class, texture sizes and geometry LOD; adaptive resolution trims the pixel ratio when frames run long (§8 Graphics). Geometry and materials are
 disposed when items change tier or the board is rebuilt; item and station views are keyed by
 `family:tier` so unchanged cells are never re-created. The simulation is a 100 ms interval
 independent of the render loop, so a slow frame cannot alter the outcome.
@@ -602,7 +641,9 @@ The platform tests load the SDK and `js/platform.js` with a stubbed fetch: token
 stripped, nickname, cloud save through `game:<slug>` (empty slot pushes the local doc, a second
 device adopts it), settings PATCH, binding overrides, invite link, Bearer on every call, zero
 fetches standalone, sign-in on the hosted domain. The graphics
-tests cover `detectPreset` on sample GPU strings and the mobile cap, `resolve` with
+tests cover the hardware level → preset mapping (SwiftShader / llvmpipe / `Radeon Graphics` /
+UHD → Low, Iris Xe → Balanced, GTX 1070 → High, RTX 4080 / 5090 → Ultra, phones and tablets
+Balanced at most), the per-preset budget table and its level scaling, `resolve` with
 Auto/explicit presets, per-category overrides, invalid tiers and render-scale clamping,
 `applyPreset` clearing overrides, `describe`, and that every panel string exists in all nine
 locales. **Rules, 16 checks, all passing:** station placement on 6×6 and
@@ -620,7 +661,7 @@ known families, board large enough for its stations, bounded duration, order tie
 
 **`npm run test:e2e` → `tests/e2e.mjs`:** two passes — desktop 1280×800 and mobile 390×844
 with touch — covering title, the Graphics section in both passes (Auto resolves to Low on the
-software GPU, Low then High applied to `data-gfx-preset` and the summary, a Bloom override,
+software GPU and the summary names Level 0, Low then High applied to `data-gfx-preset` and the summary, a Bloom override,
 both surviving a reload, Auto clearing the override, the section fitting the viewport), on
 desktop an Ultra round with the full post chain and the frame-rate readout, settings toggle applying to `<body>`, the three lessons
 (asserting a tier-2 Dough actually appears after the merge), the 40-stage Journey list with

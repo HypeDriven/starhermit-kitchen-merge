@@ -6,7 +6,7 @@ import { PRESETS, CATEGORIES, resolve, presetTier, applyPreset } from './gfx.js'
 import { getLang } from './i18n.js';
 
 const EN_US = {
-  graphics: 'Graphics', quality: 'Quality', auto: 'Auto (detected: {tier})',
+  graphics: 'Graphics', quality: 'Quality', level: 'Level {level}', auto: 'Auto (detected: {tier})',
   low: 'Low', balanced: 'Balanced', high: 'High', ultra: 'Ultra',
   renderScale: 'Render scale', fromPreset: 'From preset ({tier})',
   shadows: 'Shadows', ao: 'Ambient occlusion', bloom: 'Bloom', grade: 'Color grade',
@@ -27,7 +27,7 @@ const STRINGS = {
   'en-US': EN_US,
   'en-GB': { ...EN_US, grade: 'Colour grade' },
   'es-419': {
-    graphics: 'Gráficos', quality: 'Calidad', auto: 'Automática (detectada: {tier})',
+    graphics: 'Gráficos', quality: 'Calidad', level: 'Nivel {level}', auto: 'Automática (detectada: {tier})',
     low: 'Baja', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra',
     renderScale: 'Escala de renderizado', fromPreset: 'Según el ajuste ({tier})',
     shadows: 'Sombras', ao: 'Oclusión ambiental', bloom: 'Resplandor', grade: 'Corrección de color',
@@ -45,7 +45,7 @@ const STRINGS = {
   },
   'es-ES': null, // filled below from es-419 with Spain variants
   'de-DE': {
-    graphics: 'Grafik', quality: 'Qualität', auto: 'Automatisch (erkannt: {tier})',
+    graphics: 'Grafik', quality: 'Qualität', level: 'Stufe {level}', auto: 'Automatisch (erkannt: {tier})',
     low: 'Niedrig', balanced: 'Ausgewogen', high: 'Hoch', ultra: 'Ultra',
     renderScale: 'Renderskalierung', fromPreset: 'Aus Voreinstellung ({tier})',
     shadows: 'Schatten', ao: 'Umgebungsverdeckung', bloom: 'Bloom', grade: 'Farbkorrektur',
@@ -62,7 +62,7 @@ const STRINGS = {
     d_bloom: 'Bloom', d_reflections: 'Reflexionen', d_noAA: 'keine Kantenglättung',
   },
   'fr-FR': {
-    graphics: 'Graphismes', quality: 'Qualité', auto: 'Auto (détectée : {tier})',
+    graphics: 'Graphismes', quality: 'Qualité', level: 'Niveau {level}', auto: 'Auto (détectée : {tier})',
     low: 'Basse', balanced: 'Équilibrée', high: 'Haute', ultra: 'Ultra',
     renderScale: 'Échelle de rendu', fromPreset: 'Selon le préréglage ({tier})',
     shadows: 'Ombres', ao: 'Occlusion ambiante', bloom: 'Flou lumineux', grade: 'Étalonnage des couleurs',
@@ -80,7 +80,7 @@ const STRINGS = {
   },
   'fr-CA': null, // filled below from fr-FR with Canadian variants
   'pt-BR': {
-    graphics: 'Gráficos', quality: 'Qualidade', auto: 'Automática (detectada: {tier})',
+    graphics: 'Gráficos', quality: 'Qualidade', level: 'Nível {level}', auto: 'Automática (detectada: {tier})',
     low: 'Baixa', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra',
     renderScale: 'Escala de renderização', fromPreset: 'Da predefinição ({tier})',
     shadows: 'Sombras', ao: 'Oclusão de ambiente', bloom: 'Brilho', grade: 'Correção de cor',
@@ -97,7 +97,7 @@ const STRINGS = {
     d_bloom: 'brilho', d_reflections: 'reflexos', d_noAA: 'sem antisserrilhado',
   },
   'it-IT': {
-    graphics: 'Grafica', quality: 'Qualità', auto: 'Automatica (rilevata: {tier})',
+    graphics: 'Grafica', quality: 'Qualità', level: 'Livello {level}', auto: 'Automatica (rilevata: {tier})',
     low: 'Bassa', balanced: 'Bilanciata', high: 'Alta', ultra: 'Ultra',
     renderScale: 'Scala di rendering', fromPreset: 'Da preimpostazione ({tier})',
     shadows: 'Ombre', ao: 'Occlusione ambientale', bloom: 'Bagliore', grade: 'Correzione colore',
@@ -346,7 +346,7 @@ export function initGraphicsPanel({ root, getSaved, save, getRenderer }) {
     const saved = getSaved();
     if (r && r.ok) {
       const info = r.graphicsInfo(words);
-      summary.textContent = [info.gpu || S.unknownGpu, info.summary].join(' · ');
+      summary.textContent = [info.gpu || S.unknownGpu, (S.level || EN_US.level).replace('{level}', String(info.level ?? 0)), info.summary].join(' · ');
       note.hidden = !info.postFailed;
       document.body.dataset.gfxPreset = info.resolved.preset;
     } else {
