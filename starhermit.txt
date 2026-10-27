@@ -1,12 +1,40 @@
 name=Kitchen Merge
 description=Grow and merge ingredients into finished dishes, then serve orders before their timers expire.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.17.1
+engine.minor=19
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# The board is played with the pointer or touch (tap a station, tap an item
+# then an identical item, or drag one onto the other) or with the arrow keys
+# and Enter on the focused cell (D-pad or left stick and A on a gamepad).
 control.serve=KeyS | Serve
 control.discard=KeyD | Discard
 control.undo=KeyU | Undo (practice)
 control.hint=KeyH | Hint
 control.camera=KeyC | Reset camera
-control.pause=Escape | Pause
+control.pause=Escape | Pause (Escape deselects first)
+control.deselect=Backspace | Deselect
+engine.group.serve=Round
+
+# Gamepad defaults: the browser build's pad mapping (A activates the focused
+# cell, B deselects, Start pauses) plus the rail actions on the face buttons.
+engine.gamepad.serve=North
+engine.gamepad.discard=West
+engine.gamepad.hint=LeftShoulder
+engine.gamepad.undo=RightShoulder
+engine.gamepad.camera=RightStickPress
+engine.gamepad.pause=Start
+engine.gamepad.deselect=East

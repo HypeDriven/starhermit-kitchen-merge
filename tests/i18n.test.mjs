@@ -3,7 +3,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DICTS, LOCALES, T, setLocale } from '../js/i18n.js';
-import { stringsFor, shStrings } from '../js/gfx-ui.js';
 import { ALL } from './i18n-keys.mjs';
 
 const placeholders = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
@@ -29,14 +28,11 @@ test('no locale carries keys that no longer exist', () => {
   }
 });
 
-test('Graphics and StarHermit strings follow the game language in all nine locales', () => {
-  for (const locale of LOCALES) {
-    assert.ok(stringsFor(locale)?.graphics, locale);
-    setLocale(locale);
-    assert.ok(shStrings().signIn, locale);
-  }
+test('account and leaderboard lines follow the game language', () => {
   setLocale('de-DE');
-  assert.equal(shStrings().invite, 'Freund einladen');
+  assert.equal(T('Invite a friend'), 'Freund einladen');
+  setLocale('fr-CA');
+  assert.match(T('Posting score to the leaderboard…'), /pointage/);
   setLocale('en-US');
 });
 

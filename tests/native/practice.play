@@ -1,0 +1,55 @@
+# Practice › Relaxed: station taps, Undo, Hint, the pause menu with Settings and How to Play, Resume, Leave Round.
+until 300 Kitchen Merge
+frames 30
+save title
+click =Practice
+until 60 =Relaxed
+frames 10
+click Relaxed
+until 60 Mode Setup
+frames 10
+expect Unranked practice. Undo enabled.
+save setup
+click =Start
+until 60 =Hint
+frames 10
+click =Grain station, cell 32. Activate to generate.
+frames 5
+click =Grain station, cell 32. Activate to generate.
+frames 5
+click =Garden station, cell 35. Activate to generate.
+frames 60
+save play
+click =Undo
+frames 10
+click =Hint
+until 30 Merge the two highlighted items.
+frames 10
+save hint
+key Escape 1
+until 30 =Paused
+frames 10
+save pause
+click =Settings
+until 60 Color-vision palette
+frames 10
+click =Color-vision palette
+frames 10
+save settings
+click =Back
+until 60 =Hint
+frames 10
+key Escape 1
+until 30 =Resume
+frames 10
+click =How to Play
+until 60 Efficiency
+frames 10
+click =Back
+until 60 =Hint
+frames 10
+key Escape 1
+until 30 =Leave Round
+frames 10
+click =Leave Round
+until 60 =Play

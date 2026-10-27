@@ -1,0 +1,106 @@
+/* Kitchen Merge — the browser build's css/style.css rewritten class-based for
+   the engine's UI (`npm run css` converts it into assets/ui-style.json).
+   Element selectors, ids, attribute selectors and @media do not convert:
+   every widget names its classes and the breakpoints are layouts picked in
+   native/screens.ts. High contrast (the old body.high-contrast palette),
+   larger text and reduced motion are the runtime's options; native/style.ts
+   swaps the tokens. The board cells are drawn in native/screens.ts. */
+
+:root {
+  --bg: #17110d;
+  --panel: #241b14;
+  --panel-2: #2f241b;
+  --text: #f2e8da;
+  --muted: #b8a88f;
+  --accent: #e8a04c;
+  --accent-2: #7cc98f;
+  --danger: #d96a5a;
+  --focus: #ffd76a;
+  --edge: #00000055;
+  --line: #ffffff22;
+}
+
+* { box-sizing: border-box; }
+
+.body { color: var(--text); font-size: 16px; }
+.muted { color: var(--muted); font-size: 16px; }
+.small { color: var(--muted); font-size: 14.4px; }
+.tiny { color: var(--muted); font-size: 12px; }
+.title { color: var(--accent); font-size: 41.6px; font-weight: 700; letter-spacing: 0.8px; }
+.title-glow { color: var(--accent); font-size: 41.6px; font-weight: 700; letter-spacing: 0.8px; text-shadow: 0 0 18px #e8a04c55; }
+.h2 { color: var(--text); font-size: 24px; font-weight: 700; }
+.h3 { color: var(--text); font-size: 18.7px; font-weight: 700; }
+.strong { color: var(--text); font-size: 16px; font-weight: 700; }
+.tagline { color: var(--muted); font-size: 16px; }
+
+/* ------------------------------------------------------------- panels */
+.title-card { background: #241b14e6; border: 1px solid var(--edge); border-radius: 14px; padding: 24px 28px; box-shadow: 0 10px 40px #00000099; }
+.panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; padding: 24px 28px; box-shadow: 0 10px 40px #00000099; }
+.panel-lit { background: linear-gradient(to bottom, #2b221b, #241b14 40%); border: 1px solid var(--edge); border-radius: 14px; padding: 24px 28px; box-shadow: 0 10px 40px #00000099; }
+.hud { background: var(--panel); padding: 8px 12px; }
+.rail { background: var(--panel); border-radius: 12px; padding: 10px; }
+.rail-title { color: var(--muted); font-size: 13.6px; letter-spacing: 1.1px; font-weight: 700; }
+.hud-title { color: var(--text); font-size: 16px; font-weight: 700; }
+.hud-timer { color: var(--muted); font-size: 16px; }
+.hud-urgent { color: var(--danger); font-size: 16px; font-weight: 700; }
+.hud-score { color: var(--accent); font-size: 20.8px; font-weight: 700; }
+.pill { background: var(--accent-2); color: #10240f; border-radius: 99px; padding: 2px 8px; font-size: 12px; }
+.order { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; border-left: 4px solid var(--accent); }
+.order-expiring { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; border-left: 4px solid var(--danger); }
+.order-name { color: var(--text); font-size: 16px; font-weight: 700; }
+.order-value { color: var(--accent); font-size: 16px; }
+.card { background: var(--panel-2); border-radius: 10px; padding: 12px 14px; }
+.card-text { color: var(--muted); font-size: 14.4px; }
+.group { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.legend { color: var(--muted); font-size: 16px; }
+.total { color: var(--accent); font-size: 24px; font-weight: 700; }
+.achievements { color: var(--accent-2); font-size: 16px; font-weight: 700; }
+.score-th { color: var(--muted); font-size: 13.6px; }
+.score-row { border-bottom: 1px solid #ffffff14; padding: 6px 0; }
+.toast { background: var(--panel-2); color: var(--text); border-radius: 10px; padding: 10px 18px; font-size: 16px; box-shadow: 0 6px 20px #000000aa; }
+
+/* ------------------------------------------------------------- buttons */
+.btn {
+  min-height: 44px; min-width: 44px; padding: 10px 18px;
+  color: var(--text); background: var(--panel-2); border: 1px solid #00000066; border-radius: 10px; font-size: 16px; text-align: center;
+}
+.btn:hover { background: #3a2d22; }
+.btn:disabled { opacity: 0.45; }
+.btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.primary {
+  min-height: 44px; min-width: 44px; padding: 10px 18px;
+  color: #1d1208; background: var(--accent); border: 1px solid #00000066; border-radius: 10px; font-size: 16px; font-weight: 700; text-align: center;
+}
+.primary:hover { background: #f0b060; }
+.primary:disabled { opacity: 0.45; }
+.primary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.danger {
+  min-height: 44px; min-width: 44px; padding: 10px 18px;
+  color: #ffffff; background: var(--danger); border: 1px solid #00000066; border-radius: 10px; font-size: 16px; text-align: center;
+}
+.danger:hover { background: #e67c6c; }
+.danger:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.big { font-size: 20px; padding: 14px 22px; }
+.small-btn {
+  min-height: 36px; min-width: 44px; padding: 6px 12px;
+  color: var(--text); background: var(--panel-2); border: 1px solid #00000066; border-radius: 10px; font-size: 14.4px; text-align: center;
+}
+.small-btn:hover { background: #3a2d22; }
+.small-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.small-on {
+  min-height: 36px; min-width: 44px; padding: 6px 12px;
+  color: #1d1208; background: var(--accent); border: 1px solid #00000066; border-radius: 10px; font-size: 14.4px; font-weight: 700; text-align: center;
+}
+.small-on:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.list-btn {
+  min-height: 44px; padding: 10px 14px;
+  color: var(--text); background: var(--panel-2); border: 1px solid #00000066; border-radius: 10px; font-size: 16px; text-align: left;
+}
+.list-btn:hover { background: #3a2d22; }
+.list-btn:disabled { opacity: 0.4; }
+.list-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.list-sub { color: var(--muted); font-size: 12px; }
+.list-label { color: var(--text); font-size: 16px; }
+
+/* The results panel's plated-dish wash (#overlay-results .panel). */
+.results-wash { background: linear-gradient(to bottom, #241b14cc 0%, #241b14 62%), url('../assets/results-plating.webp') center top / cover no-repeat, #241b14; border-radius: 10px; }

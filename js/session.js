@@ -1,11 +1,14 @@
 // Kitchen Merge — session controller: local rounds, snapshots, undo,
-// replay envelopes, tick loop, persistence. Only this module issues
-// validated commands to the rules engine.
+// replay envelopes, the fixed-step tick, persistence. Only this module issues
+// validated commands to the rules engine. The host calls tick() once per
+// TICK_MS of its own fixed steps (the StarHermit runtime's onFixedUpdate), so
+// a round runs the same on every machine and in play scripts.
 import {
   createGame, applyCommand, advance, legalActions, totalScore,
   serializeState, stateHash, makeReplayEnvelope, recordCommand, closeEnvelope,
-  TICK_MS,
 } from './rules.js';
+
+export { TICK_MS } from './rules.js';
 
 const LS_PREFIX = 'kitchen-merge:';
 let cmdCounter = 0;
@@ -28,7 +31,7 @@ export class Session {
     this.listeners = { events: [], change: [] };
     this.undoStack = [];
     this.undoEnabled = !!level.undo || !!opts.undo;
-    this.timer = null;
+    this.running = false;
     this.paused = false;
     this.sessionId = opts.sessionId || ('s' + Math.random().toString(36).slice(2, 10));
     this.onEvent = opts.onEvent || (() => {});
@@ -37,17 +40,18 @@ export class Session {
     this.ranked = !!opts.ranked;
   }
 
-  start() {
-    this.stop();
-    this._acc = 0;
-    this._last = performance.now();
-    this.timer = setInterval(() => this._step(), TICK_MS);
-  }
+  start() { this.running = true; }
 
-  stop() { if (this.timer) { clearInterval(this.timer); this.timer = null; } }
+  stop() { this.running = false; }
 
   pause() { this.paused = true; }
-  resume() { this.paused = false; this._last = performance.now(); }
+  resume() { this.paused = false; }
+
+  /** One TICK_MS step of the round's clock (the host's fixed steps). */
+  tick() {
+    if (!this.running) return;
+    this._step();
+  }
 
   _step() {
     if (this.paused || this.state.phase !== 'active') return;

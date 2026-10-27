@@ -1,0 +1,44 @@
+# The menus: How to Play, Settings, Scores (local and global), the Daily Challenge set-up, the Journey list.
+until 300 Kitchen Merge
+frames 30
+click =How to Play
+until 60 Efficiency
+frames 10
+save help
+click =Back
+until 60 =Play
+frames 10
+click =Settings
+until 60 Accessibility
+frames 10
+click =Open Options
+frames 30
+key F1 1
+frames 30
+click =Back
+until 60 =Play
+frames 10
+click =Scores
+until 60 No scores yet
+frames 10
+click =Global (daily)
+until 60 No global scores available
+frames 10
+save scores
+click =Back
+until 60 =Play
+frames 10
+click =Daily Challenge
+until 60 Ranked — validated on the daily board.
+frames 10
+save daily
+click =Back
+until 60 =Play
+frames 10
+click =Journey
+until 60 Mastery 1
+frames 10
+expect Locked
+save journey
+key Escape 1
+until 60 =Play

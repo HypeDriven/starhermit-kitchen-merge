@@ -1,6 +1,6 @@
 // Key extraction for the i18n coverage test (run directly to list the keys).
-// Keys are the US-English source strings: literal T('…') / N('…') calls in js/,
-// data-i18n markup in index.html, the content tables' display fields and the
+// Keys are the US-English source strings: literal T('…') / N('…') calls in js/
+// and native/, the content tables' display fields and the
 // English sentences the rules engine and hint engine return.
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -13,13 +13,14 @@ const unescape = (s) => s.replace(/\\(['"\\])/g, '$1');
 export function sourceKeys() {
   const keys = new Set();
   const call = /(?<![\w.$])(?:T|N)\(\s*(?:'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)")/g;
-  for (const f of readdirSync(join(ROOT, 'js'))) {
-    if (!f.endsWith('.js') || f === 'i18n.js') continue;
-    const src = readFileSync(join(ROOT, 'js', f), 'utf8');
-    for (const m of src.matchAll(call)) keys.add(unescape(m[1] ?? m[2]));
+  const dirs = [['js', '.js'], ['native', '.ts']];
+  for (const [dir, ext] of dirs) {
+    for (const f of readdirSync(join(ROOT, dir))) {
+      if (!f.endsWith(ext) || f.startsWith('i18n.')) continue;
+      const src = readFileSync(join(ROOT, dir, f), 'utf8');
+      for (const m of src.matchAll(call)) keys.add(unescape(m[1] ?? m[2]));
+    }
   }
-  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
-  for (const m of html.matchAll(/data-i18n(?:-aria|-title)?="([^"]+)"/g)) keys.add(m[1]);
   return keys;
 }
 
