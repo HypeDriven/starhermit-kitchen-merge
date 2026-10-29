@@ -24,13 +24,14 @@ import {
   PlaneGeometry, PMREMGenerator, Points, PointsMaterial, RepeatWrapping, RoomEnvironment, RoundedBoxGeometry, SphereGeometry,
   SRGBColorSpace, TorusGeometry, renderer, scene,
   type Material, type Texture,
+  type OrthographicCamera,
 } from "starhermit:scene";
 import { OffscreenCanvas, type OffscreenCanvasRenderingContext2D } from "starhermit:canvas";
 import { THEMES } from "../js/content.js";
 import { particlePool, type Look } from "./quality.ts";
 
 const PI = Math.PI;
-const KEY = 2.4 / PI;
+const KEY = 2.4;
 export const FAMILY_COLORS: Record<string, number> = { grain: 0xd9b36a, garden: 0x6fbf5a, dairy: 0xf2ead2, ember: 0xd96a4a };
 /** Colour-vision-safe palette (colour is always reinforced by shape and labels). */
 export const FAMILY_COLORS_CB: Record<string, number> = { grain: 0xddcc77, garden: 0x117733, dairy: 0xf2f2f2, ember: 0xcc6677 };
@@ -129,8 +130,9 @@ camera.up.set(0, 0, -1);
 const key = new DirectionalLight(0xffd9a0, KEY);
 key.position.set(3.5, 9, 2.5);
 key.shadow.bias = -0.0004;
+key.shadow.normalBias = 0.02;
 key.shadow.radius = 3;
-const fill = new HemisphereLight(0x8a7ab0, 0x2a2018, 0.7 / PI);
+const fill = new HemisphereLight(0x8a7ab0, 0x2a2018, 0.7);
 scene.add(key, key.target, fill);
 scene.background = new Color(0x1d1512);
 
@@ -318,10 +320,12 @@ function buildBoard(c: number, r: number): void {
   clearViews();
   fitShadow();
 }
-/** The engine fits the directional shadow along the view out to `distance` (three.js fitted an ortho box to the board). */
+/** The key light's ortho shadow box fitted to the board (render.js _fitShadow). */
 function fitShadow(): void {
   const half = (Math.max(cols || 6, rows || 6) * 1.05) / 2 + 0.9;
-  key.shadow.distance = Math.max(12, camDist + half * 2);
+  const cam = key.shadow.camera as OrthographicCamera;
+  cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half; cam.near = 2; cam.far = 22;
+  cam.updateProjectionMatrix();
 }
 
 function itemMaterial(color: number, extra: Omit<StdParams, "color"> = {}): Material {
@@ -497,15 +501,20 @@ export function applyLook(next: Look): void {
   if (shadows) key.shadow.mapSize = next.shadows;
   if (next.reflections) {
     if (!envTex) {
-      try { envTex = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(renderer), 0.04).texture; }
+      try { envTex = (() => {
+        // three r183+: RoomEnvironment(renderer) with the room lowered (engine environment-ports rule)
+        const room = new RoomEnvironment(renderer);
+        room.position.y = -3.5;
+        return new PMREMGenerator(renderer).fromScene(room, 0.04).texture;
+      })(); }
       catch (e) { console.warn(`environment: ${e instanceof Error ? e.message : String(e)}`); }
     }
     scene.environment = envTex;
     scene.environmentIntensity = 0.5;
-    fill.intensity = 0.45 / PI;
+    fill.intensity = 0.45;
   } else {
     scene.environment = null;
-    fill.intensity = 0.7 / PI;
+    fill.intensity = 0.7;
   }
   const hi = next.ao === "high";
   renderer.ao = next.ao === "off" ? null : {
@@ -514,12 +523,13 @@ export function applyLook(next: Look): void {
   };
   // High threshold: only glowing stations, rings, sparks and the window bloom (UnrealBloomPass 0.4, 0.35, 0.9).
   renderer.bloom = next.bloom ? { strength: 0.4, radius: 0.35, threshold: 0.9, resolution: next.budget.bloomRes } : null;
-  // js/render.js GradeShader (display space): a gentle S-curve, a touch more saturation,
+  // js/render.js GradeShader (before OutputPass, so on linear HDR colour): a gentle S-curve, a touch more saturation,
   // warm highlights / cool shadows and the 0.2 vignette.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.09, saturation: 1.1,
+    space: "linear", contrast: 0.09, saturation: 1.1,
     shadows: [0.97, 0.98, 1.04], highlights: [1.05, 1.0, 0.94], split: [0.2, 0.8],
     vignette: { amount: 0.2, inner: 0.38, outer: 0.85 },
+    overRange: "keep", // minor 29: mix(c, s + max(c - 1, 0), amount) as the page's grade
   } : null;
   renderer.antialias = next.antialias;
   const pb = before?.budget;
