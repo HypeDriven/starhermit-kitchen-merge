@@ -526,7 +526,7 @@ export function applyLook(next: Look): void {
   // js/render.js GradeShader (before OutputPass, so on linear HDR colour): a gentle S-curve, a touch more saturation,
   // warm highlights / cool shadows and the 0.2 vignette.
   renderer.grade = next.grade ? {
-    space: "linear", contrast: 0.09, saturation: 1.1,
+    space: "linear", contrastCurve: "s", contrast: 0.18, saturation: 1.1,
     shadows: [0.97, 0.98, 1.04], highlights: [1.05, 1.0, 0.94], split: [0.2, 0.8],
     vignette: { amount: 0.2, inner: 0.38, outer: 0.85 },
     overRange: "keep", // minor 29: mix(c, s + max(c - 1, 0), amount) as the page's grade

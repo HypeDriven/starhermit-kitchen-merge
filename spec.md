@@ -16,7 +16,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | Genre | Single-player merge/service puzzle with real-time order timers |
 | Players | 1, plus asynchronous comparison (local records; the StarHermit `high-score` board when signed in) |
 | Session length | 90 s (a Challenge) to ~5 min (Daily); Journey stages run 3–4.5 min |
-| Platforms | StarHermit engine 1.27.0 script game (host API 1.29, `engine.minor=29`): natively in the StarHermit client, in desktop and mobile browsers through the engine's web runtime; portrait and landscape |
+| Platforms | StarHermit engine 1.28.0 script game (host API 1.30, `engine.minor=30`): natively in the StarHermit client, in desktop and mobile browsers through the engine's web runtime; portrait and landscape |
 | Rendering | The kitchen on `starhermit:scene` behind a grid of labelled cell widgets (`starhermit:ui`) that is the single interaction and accessibility surface |
 | Simulation | Fixed 100 ms tick on the runtime's 60 Hz fixed steps, seeded PRNG, serializable state, replayable command log |
 
@@ -24,7 +24,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: name, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.entry=native/main.ts`, `engine.version=1.27.0`, `engine.minor=29`, capabilities (platform, storage, clipboard), `control.*` and `engine.gamepad.*` defaults. |
+| `starhermit.txt` | Manifest: name, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.entry=native/main.ts`, `engine.version=1.28.0`, `engine.minor=30`, capabilities (platform, storage, clipboard), `control.*` and `engine.gamepad.*` defaults. |
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand. |
 | `native/main.ts` | Entry module: screen flow, rounds on the fixed steps, the selection model, drags, rule events → sound/announcements/effects, lessons, progression, achievements, results, leaderboard posting, lifecycle. |
 | `native/screens.ts` | Every screen and dialog as `starhermit:ui`: title, list picker, setup, play (HUD, Orders and Actions rails, the cell grid), pause and results dialogs, How to Play, Settings, Scores, toast. |
