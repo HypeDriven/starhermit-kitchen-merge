@@ -23,7 +23,7 @@ save play
 click =Undo
 frames 10
 click =Hint
-until 30 Merge the two highlighted items.
+until 30 highlighted
 frames 10
 save hint
 key Escape 1
