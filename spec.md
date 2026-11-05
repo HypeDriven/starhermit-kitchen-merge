@@ -353,10 +353,7 @@ gets 4096 shadows and full-resolution AO), and the browser build's art presets
 | Low | off | off | off | MSAA | off | plain | Lambert | — | ½ | — | 0.5× |
 | Balanced | 1024 | off | on | FXAA | room env | detailed | Standard | 512 / 128 | ¾ | 28 | 0.75× |
 | High | 2048 | on | on | SMAA | room env | detailed | Physical (clearcoat, sheen) | 512 / 128 | 1 | 40 | 1× |
-| Ultra | 4096 | high | on | MSAA | room env | detailed | Physical | 1024 / 256 | 1.5 | 80 | 1.5× |
-
-Low keeps MSAA although the engine's quantum level asks for none: engine 1.36.1's anti-aliasing
-"off" recolours fog and translucent overlays (until engine 1.36.2). Motes and sparks grow with
+| Ultra | 4096 | high | on | MSAA | room env | detailed | Physical | 1024 / 256 | 1.5 | 80 | 1.5× | Motes and sparks grow with
 the level's particle budget over the preset's anchor level (≤ 2×). Detailed scenes add rounded
 glazed tiles with a speckle texture, butcher-block wood (with bump) on the counter and station
 bases, and the surround (shelf, three pans, window glow, copper rail, salt cellar). Post effects
