@@ -1,21 +1,24 @@
-// The look per graphics level: the browser build's four presets and budgets
-// (js/gfx.js TABLE / BUDGETS, each tuned to hold 60 FPS on the weakest GPU its
-// Auto gave it) keyed by the runtime's quality tier (frame().quality), with
-// the burst sparks and the dust motes scaled within the tier by the level
-// (frame().levelIndex), as the browser build scaled them by its hardware level
-// (at most 2×). The runtime owns the rest of what the old Graphics panel did:
-// Auto and the level choice, render scale and the pixel-ratio cap, adaptive
-// resolution, the frame-rate limit and readout, and the shadow-map size and
-// MSAA samples it holds to the level. The per-category overrides of the old
-// panel are not offered (the runtime's Options choose a level).
-import type { QualityTier } from "starhermit:engine";
+// The look per graphics level. The engine-owned effects (shadows and their
+// map size, ambient occlusion, bloom, the grade, anti-aliasing) are the
+// level's own (levelSettings(): the same table every StarHermit game reads).
+// The game's art (materials, wood and tile textures, geometry LOD,
+// reflections, particles, motes, detail, ambient motion) is the browser
+// build's four presets and budgets (js/gfx.js TABLE / BUDGETS) keyed by the
+// level's quality tier, with the burst sparks and the dust motes scaled within
+// the tier by the level's particle budget against the tier's anchor level
+// (quantum, molecular, terrestrial, galactic), at most twice the tier's. The
+// runtime owns the rest of what the old Graphics panel did: Auto and the level
+// choice, render scale and the pixel-ratio cap, adaptive resolution, the
+// frame-rate limit and readout. The per-category overrides of the old panel
+// are not offered (the runtime's Options choose a level).
+import { levelSettings, type GraphicsLevel, type LevelSettings, type QualityTier } from "starhermit:engine";
 import type { AntialiasMode } from "starhermit:scene";
 
 export type Preset = QualityTier;
 export interface Budget {
   /** Lit materials: Lambert, standard PBR, or clear-coated physical props. */
   material: "lambert" | "standard" | "physical";
-  /** Butcher-block wood and glazed tile texture sizes (px). */
+  /** Butcher-block wood and glazed tile texture sizes (px), within the level's largest texture. */
   wood: number;
   tile: number;
   /** Geometry LOD: multiplies the segment counts of ingredients, stations, rings and props. */
@@ -23,14 +26,15 @@ export interface Budget {
   /** Dust motes in the lamplight; spark burst factor. */
   motes: number;
   sparks: number;
-  bloomRes: number;
-  aoRes: number;
 }
 export interface Look {
   preset: Preset;
-  shadows: 0 | 1024 | 2048 | 4096;
-  ao: "off" | "on" | "high";
-  bloom: boolean;
+  /** The level's key-light shadow map size, 0 when the level draws no shadows. */
+  shadows: number;
+  /** The level's ambient occlusion (null: off). */
+  ao: { resolution: number; samples: number; denoiseSamples: number } | null;
+  /** The level's bloom resolution (null: off). */
+  bloom: number | null;
   grade: boolean;
   antialias: AntialiasMode;
   reflections: boolean;
@@ -43,29 +47,43 @@ export interface Look {
   budget: Budget;
 }
 
-const TABLE: Record<Preset, Omit<Look, "preset" | "budget">> = {
-  low: { shadows: 0, ao: "off", bloom: false, grade: false, antialias: "msaa", reflections: false, particlesHigh: false, detailed: false, animated: false },
-  balanced: { shadows: 1024, ao: "off", bloom: true, grade: true, antialias: "fxaa", reflections: true, particlesHigh: true, detailed: true, animated: true },
-  high: { shadows: 2048, ao: "on", bloom: true, grade: true, antialias: "smaa", reflections: true, particlesHigh: true, detailed: true, animated: true },
-  ultra: { shadows: 4096, ao: "high", bloom: true, grade: true, antialias: "msaa", reflections: true, particlesHigh: true, detailed: true, animated: true },
+type Art = Pick<Look, "reflections" | "particlesHigh" | "detailed" | "animated">;
+const ART: Record<Preset, Art> = {
+  low: { reflections: false, particlesHigh: false, detailed: false, animated: false },
+  balanced: { reflections: true, particlesHigh: true, detailed: true, animated: true },
+  high: { reflections: true, particlesHigh: true, detailed: true, animated: true },
+  ultra: { reflections: true, particlesHigh: true, detailed: true, animated: true },
 };
 const BUDGETS: Record<Preset, Budget> = {
-  low: { material: "lambert", wood: 256, tile: 64, segments: 0.5, motes: 16, sparks: 0.5, bloomRes: 0.5, aoRes: 0.5 },
-  balanced: { material: "standard", wood: 512, tile: 128, segments: 0.75, motes: 28, sparks: 0.75, bloomRes: 0.5, aoRes: 0.5 },
-  high: { material: "physical", wood: 512, tile: 128, segments: 1, motes: 40, sparks: 1, bloomRes: 0.5, aoRes: 0.5 },
-  ultra: { material: "physical", wood: 1024, tile: 256, segments: 1.5, motes: 80, sparks: 1.5, bloomRes: 1, aoRes: 1 },
+  low: { material: "lambert", wood: 256, tile: 64, segments: 0.5, motes: 16, sparks: 0.5 },
+  balanced: { material: "standard", wood: 512, tile: 128, segments: 0.75, motes: 28, sparks: 0.75 },
+  high: { material: "physical", wood: 512, tile: 128, segments: 1, motes: 40, sparks: 1 },
+  ultra: { material: "physical", wood: 1024, tile: 256, segments: 1.5, motes: 80, sparks: 1.5 },
 };
-/** The first level index of each tier (quantum, molecular, terrestrial, galactic). */
-const TIER_FLOOR: Record<Preset, number> = { low: 0, balanced: 2, high: 4, ultra: 7 };
+/** The level whose settings are each tier's preset. */
+const ANCHOR: Record<Preset, GraphicsLevel> = { low: "quantum", balanced: "molecular", high: "terrestrial", ultra: "galactic" };
 
-/** The look for a quality tier at a level index (0 quantum … 9 infinite). */
-export function lookFor(preset: Preset, levelIndex: number): Look {
+/** The look for a graphics level (the frame's by default). */
+export function lookFor(s: LevelSettings = levelSettings()): Look {
+  const preset = s.quality;
   const b = { ...BUDGETS[preset] };
-  // Levels are about 1.64× apart: sparks and motes grow above the tier's first level, at most 2×.
-  const k = Math.min(2, Math.pow(1.64, Math.max(0, levelIndex - TIER_FLOOR[preset])));
+  // Sparks and motes grow with the level's particle budget above the tier's anchor, at most 2×.
+  const k = Math.min(2, s.particles / levelSettings(ANCHOR[preset]).particles);
   b.sparks = Math.round(b.sparks * k * 100) / 100;
   b.motes = Math.round(b.motes * k);
-  return { preset, ...TABLE[preset], budget: b };
+  b.wood = Math.min(b.wood, s.maxTextureSize);
+  b.tile = Math.min(b.tile, s.maxTextureSize);
+  return {
+    preset, ...ART[preset],
+    shadows: s.shadows ? s.shadowMapSize : 0,
+    ao: s.ao && { resolution: s.ao.resolution, samples: s.ao.samples, denoiseSamples: s.ao.denoiseSamples },
+    bloom: s.bloom ? s.bloom.resolution : null,
+    grade: s.grade,
+    // Engine 1.36.1 bug: antialias "off" recolours fog, haze and translucent overlays; the old Low's MSAA
+    // stays until engine 1.36.2 (drop this clamp when pinning 1.36.2+).
+    antialias: s.antialias === "off" ? "msaa" : s.antialias,
+    budget: b,
+  };
 }
 /** Particle pool size (js/gfx.js particlePool). */
 export function particlePool(look: Look): number {

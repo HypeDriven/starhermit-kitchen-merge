@@ -342,7 +342,11 @@ light flickers, dust motes drift. The runtime's reduced-motion option stops spar
 ambient motion.
 
 **Graphics levels.** The runtime's Options choose the level (Auto by default); the game reads
-`frame().quality` and `levelIndex` and applies the browser build's presets (`native/quality.ts`):
+`levelSettings()` for the frame's level: shadows and their map size, AO, bloom, the grade and
+anti-aliasing are the level's own (the engine's table every StarHermit game reads; the values
+below are each preset's anchor level, and levels above an anchor raise them, e.g. High at stellar
+gets 4096 shadows and full-resolution AO), and the browser build's art presets
+(`native/quality.ts`) follow the level's quality tier:
 
 | Preset | Shadows | AO | Bloom / grade | AA | Reflections | Detail | Materials | Wood / tile tex | LOD | Motes | Sparks |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -351,7 +355,9 @@ ambient motion.
 | High | 2048 | on | on | SMAA | room env | detailed | Physical (clearcoat, sheen) | 512 / 128 | 1 | 40 | 1× |
 | Ultra | 4096 | high | on | MSAA | room env | detailed | Physical | 1024 / 256 | 1.5 | 80 | 1.5× |
 
-Motes and sparks grow with the level within a preset (≤ 2×). Detailed scenes add rounded
+Low keeps MSAA although the engine's quantum level asks for none: engine 1.36.1's anti-aliasing
+"off" recolours fog and translucent overlays (until engine 1.36.2). Motes and sparks grow with
+the level's particle budget over the preset's anchor level (≤ 2×). Detailed scenes add rounded
 glazed tiles with a speckle texture, butcher-block wood (with bump) on the counter and station
 bases, and the surround (shelf, three pans, window glow, copper rail, salt cellar). Post effects
 are the runtime's `renderer.ao` (GTAO), `bloom` (threshold 0.9), `grade` (display-space S-curve,

@@ -185,7 +185,7 @@ scene.add(motes);
 let envTex: Texture | null = null;
 let textures: { wood: Texture; tile: Texture; size: string } | null = null;
 const detailed = (): boolean => !!look && look.detailed;
-const budget = (): Look["budget"] => look?.budget ?? { material: "standard", wood: 512, tile: 128, segments: 1, motes: 28, sparks: 1, bloomRes: 0.5, aoRes: 0.5 };
+const budget = (): Look["budget"] => look?.budget ?? { material: "standard", wood: 512, tile: 128, segments: 1, motes: 28, sparks: 1 };
 function tex(): { wood: Texture; tile: Texture } {
   const b = budget();
   const size = `${b.wood}:${b.tile}`;
@@ -498,7 +498,7 @@ export function applyLook(next: Look): void {
   const shadows = next.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   key.castShadow = shadows;
-  if (shadows) key.shadow.mapSize = next.shadows;
+  if (shadows) key.shadow.mapSize = next.shadows; // the level's size (the engine keeps the game's at minor 23+)
   if (next.reflections) {
     if (!envTex) {
       try { envTex = (() => {
@@ -516,13 +516,13 @@ export function applyLook(next: Look): void {
     scene.environment = null;
     fill.intensity = 0.7;
   }
-  const hi = next.ao === "high";
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.4, thickness: 0.6, scale: 1.0, samples: hi ? 16 : 8, resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: hi ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, hi = !!ao && ao.resolution >= 1; // full-resolution AO: the old "high"
+  renderer.ao = ao && {
+    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.4, thickness: 0.6, scale: 1.0, samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // High threshold: only glowing stations, rings, sparks and the window bloom (UnrealBloomPass 0.4, 0.35, 0.9).
-  renderer.bloom = next.bloom ? { strength: 0.4, radius: 0.35, threshold: 0.9, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { strength: 0.4, radius: 0.35, threshold: 0.9, resolution: next.bloom };
   // js/render.js GradeShader (before OutputPass, so on linear HDR colour): a gentle S-curve, a touch more saturation,
   // warm highlights / cool shadows and the 0.2 vignette.
   renderer.grade = next.grade ? {

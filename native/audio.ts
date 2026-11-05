@@ -12,8 +12,8 @@
 // clips (createClip) with the old filter and envelope; the synthesized
 // stand-ins the browser build played while a clip decoded are not ported (a
 // live synthesis graph makes clip loads fail on the engine's web runtime), so
-// a clip still loading is silent. Clips load once the mixer runs (natively at
-// once, in a browser after the first press), one at a time.
+// a clip still loading is silent. Every clip starts loading at start-up (the
+// mixer takes them before it runs); the bed and the music still wait for it.
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
 import { hashString, makeRng } from "../js/rules.js";
 
@@ -26,20 +26,14 @@ const SAMPLES: Record<Cue, string> = {
 };
 
 const clips = new Map<string, AudioClip>();
-const queue: string[] = [];
-let loading = false;
-let wantClips = false;
 let suspended = false;
 
-function load(name: string): void { if (!queue.includes(name) && !clips.has(name)) queue.push(name); }
-function pump(): void {
-  if (loading || !queue.length) return;
-  const name = queue.shift()!;
-  loading = true;
-  loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); loading = false; }, (e: unknown) => { console.warn(`sfx ${name}: ${String(e)}`); loading = false; });
+/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
+export function loadSfx(): void {
+  for (const name of new Set(Object.values(SAMPLES))) {
+    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
 }
-/** Asks for the clips; they load once the mixer runs (see update). */
-export function loadSfx(): void { wantClips = true; }
 
 /** Plays a cue's sample (once loaded). */
 export function cue(name: Cue): void {
@@ -47,7 +41,7 @@ export function cue(name: Cue): void {
   const clip = clips.get(file);
   if (!clip || suspended) return;
   try { playClip(clip, { bus: "effects", gain: LEVEL.effects }); }
-  catch { clips.delete(file); load(file); } // a clip the mixer lost: load it again
+  catch { /* the mixer is full this frame: skip it */ }
 }
 
 // -- the ambience bed and the music -----------------------------------------------------------
@@ -104,17 +98,10 @@ export function stopRound(): void {
 /** A hidden window: everything holds (the music skipped while the tab was hidden). */
 export function setSuspended(on: boolean): void { suspended = on; }
 
-/** Each frame: the clips once the mixer runs (one at a time), the bed and the notes rendered
- * one each 0.3 s after them, the bed, then the music's steps by mixer time. */
+/** Each frame once the mixer runs: the bed and the notes rendered one each 0.3 s, the bed,
+ * then the music's steps by mixer time. */
 export function update(): void {
   if (context.state !== "running") return;
-  if (wantClips) {
-    wantClips = false;
-    for (const name of Object.values(SAMPLES)) load(name);
-    return;
-  }
-  pump();
-  if (loading || queue.length) return;
   try {
     if (context.currentTime >= nextRender) {
       if (!bed) { bed = ambienceClip(); nextRender = context.currentTime + 0.3; return; }

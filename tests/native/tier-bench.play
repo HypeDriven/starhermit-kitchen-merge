@@ -1,0 +1,58 @@
+# Graphics-tier bench (tools/engine-tier-bench.mjs): Challenges › Thirty Moves (fixed board) measured in
+# play: station taps, merges up the chains and three serves with their sparks, motes and the lamp.
+# viewport 1280x800
+until 300 Kitchen Merge
+frames 30
+click =Challenges
+until 60 Thirty Moves
+frames 10
+click Thirty Moves
+until 60 Mode Setup
+frames 10
+click =Start
+until 60 =Free service
+frames 30
+frames 5
+frames 120
+measure start
+click =Grain station, cell 32. Activate to generate.
+frames 5
+click =Dairy station, cell 35. Activate to generate.
+frames 5
+click =Grain station, cell 32. Activate to generate.
+frames 5
+click =Sprout (Grain tier 1), cell 11
+frames 5
+click =Sprout (Grain tier 1), cell 31
+frames 20
+frames 5
+click =Dough (Grain tier 2), cell 31
+frames 5
+click =Serve
+frames 220
+frames 5
+click =Dairy station, cell 35. Activate to generate.
+frames 5
+click =Milk Jug (Dairy tier 1), cell 7
+frames 5
+click =Milk Jug (Dairy tier 1), cell 13
+frames 5
+click =Dairy station, cell 35. Activate to generate.
+frames 5
+click =Grain station, cell 32. Activate to generate.
+frames 5
+click =Sprout (Grain tier 1), cell 12
+frames 5
+click =Serve
+frames 220
+frames 5
+click =Milk Jug (Dairy tier 1), cell 21
+frames 5
+click =Serve
+frames 220
+frames 5
+click =Dairy station, cell 35. Activate to generate.
+frames 5
+click =Grain station, cell 32. Activate to generate.
+frames 5
+measure stop

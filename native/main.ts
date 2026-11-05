@@ -18,7 +18,7 @@
 // Time is the runtime's fixed steps (60 a second): the session's 100 ms tick,
 // the lesson's 0.8 s hand-over and the hint's 3 s run on them, so play scripts
 // replay exactly.
-import { frame, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
+import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
 import { onAction, onPointerButton, onPointerMove, onTouch, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { requestSignIn } from "starhermit:platform";
@@ -605,10 +605,10 @@ onTouch((e) => {
 let lookKey = "";
 function applyLook(): void {
   const f = frame();
-  const k = `${f.quality}:${f.levelIndex}`;
+  const k = f.level;
   if (k === lookKey) return;
   lookKey = k;
-  render.applyLook(lookFor(f.quality, f.levelIndex));
+  render.applyLook(lookFor(levelSettings(f.level)));
 }
 
 onStart(() => {
