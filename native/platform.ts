@@ -20,8 +20,7 @@
 //   Options;
 // - the player, the invite link, the platform's clock for the daily, the
 //   high-score board (read for Scores › Global) and posting a finished round's
-//   total through score-script.js (a practice session whose socket carries
-//   { type: 'result', scores }, as the JS SDK's submitScores did; the script
+//   total through score-script.js (leaderboards.submitScore; the script
 //   range-checks it) with the rank on the high-score board.
 import type { JsonValue } from "starhermit:engine";
 import {
