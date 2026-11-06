@@ -18,7 +18,7 @@ import * as ui from "starhermit:ui";
 import { totalScore } from "../js/rules.js";
 import { CHALLENGES, JOURNEY_LEVELS, THEMES, TUTORIALS } from "../js/content.js";
 import { store } from "../js/session.js";
-import { N, T } from "./i18n.ts";
+import { account, N, T } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import * as render from "./render.ts";
 import {
@@ -32,10 +32,9 @@ import { ink } from "./style.ts";
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; ox: number; oy: number }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  return { lw: Math.max(1, (f.width - sa.left - sa.right) / sc), lh: Math.max(1, (f.height - sa.top - sa.bottom) / sc), sc, ox: sa.left / sc, oy: sa.top / sc };
+  const v = ui.viewport!();
+  const sc = v.scale;
+  return { lw: Math.max(1, v.width), lh: Math.max(1, v.height), sc, ox: v.x, oy: v.y };
 }
 const lastHeight = new Map<string, number>();
 const pr = (): ui.UiPreferences => ui.preferences();
@@ -183,8 +182,8 @@ function titleScreen(L: Layout): void {
       { id: "btn-help", text: T("How to Play"), act: () => openHelp("title") },
       { id: "btn-settings", text: T("Settings"), act: () => openSettings("title") },
     ];
-    if (platform.inviteLink()) list.push({ id: "btn-invite", text: T("Invite a friend"), act: copyInvite });
-    if (!platform.signedIn()) list.push({ id: "btn-signin", text: T("Sign in with StarHermit"), act: signIn });
+    if (platform.inviteLink()) list.push({ id: "btn-invite", text: account("invite"), act: copyInvite });
+    if (!platform.signedIn()) list.push({ id: "btn-signin", text: account("signIn"), act: signIn });
     ui.column("title-menu", () => {
       for (const b of list) {
         if (b.id === "btn-journey" && journeyPill) {

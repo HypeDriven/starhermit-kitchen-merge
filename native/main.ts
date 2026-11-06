@@ -27,7 +27,7 @@ import { FAMILIES, TICK_MS, hashString } from "../js/rules.js";
 import { ACHIEVEMENTS, CHALLENGES, JOURNEY_LEVELS, TUTORIALS, dailyLevel, practiceLevel } from "../js/content.js";
 import { Session, store } from "../js/session.js";
 import * as audio from "./audio.ts";
-import { N, T } from "./i18n.ts";
+import { account, N, T } from "./i18n.ts";
 import * as platform from "./platform.ts";
 import { lookFor } from "./quality.ts";
 import * as render from "./render.ts";
@@ -434,9 +434,9 @@ function postToLeaderboard(total: number, mode: Mode | null): void {
 export function leaderboardLine(): string | null {
   const lb = app.lb;
   if (!lb) return null;
-  if (lb === "posting") return T("Posting score to the leaderboard…");
-  if (!lb.posted) return T("Score not posted to the leaderboard.");
-  return lb.rank ? T("Leaderboard rank: #{rank}", { rank: lb.rank }) : T("Score posted to the leaderboard.");
+  if (lb === "posting") return account("leaderboardPosting");
+  if (!lb.posted) return account("leaderboardNotPosted");
+  return lb.rank ? account("leaderboardRank", { rank: lb.rank }) : account("leaderboardPosted");
 }
 function evaluateAchievements(): string[] {
   const p = store.getProgress() as { achievements: Record<string, { announced: boolean }> };
@@ -499,11 +499,11 @@ export function closePause(): void {
 export function copyInvite(): void {
   const link = platform.inviteLink();
   if (!link) return;
-  try { clipboard.writeText(link); toast(T("Invite link copied to clipboard."), 4000); }
-  catch { toast(T("Could not copy the invite link: {link}", { link }), 4000); }
+  try { clipboard.writeText(link); toast(account("inviteCopied"), 4000); }
+  catch { toast(account("inviteLink", { link }), 4000); }
 }
 export function signIn(): void { void requestSignIn().catch(() => undefined); }
-platform.onPlayer((signedIn) => { if (!signedIn) toast(T("Signed out of StarHermit. Progress keeps saving on this device."), 4000); });
+platform.onPlayer((signedIn) => { if (!signedIn) toast(account("signedOut"), 4000); });
 
 // ------------------------------------------------------------------ input
 onAction((e) => {

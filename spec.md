@@ -37,7 +37,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | `js/content.js` | Versioned content: themes, 3 tutorials, 40 Journey stages, daily generator, practice difficulties, 4 challenges, achievements, validators. |
 | `js/session.js` | Round controller: `tick()` per 100 ms step, undo stack, replay recording, the `store` over `localStorage` keys. |
 | `js/save.js` | The save document (`parseDoc`) and the two-device merge (`mergeDocs`). |
-| `js/i18n.js`, `js/locales/` | `T`, `N`, `setLocale`, `onLanguage` and the per-locale catalogues keyed by the US-English text. |
+| `assets/strings.json` | The per-locale tables keyed by the US-English text, read by the engine's `strings`; account lines are its `starhermit.*`. |
 | `score-script.js` | StarHermit platform script (`server=`): range-checks a finished round's score and posts it to the `high-score` board (canonical copy). |
 | `tools/ui-style.css` → `assets/ui-style.json` | The browser style sheet rewritten class-based; `npm run css` converts it. |
 | `tools/gen-plays.mjs`, `tools/browser-play.mjs`, `tools/package-web.mjs`, `tools/css.mjs` | Play-script generator, GPU-Chrome browser play, web packaging, CSS conversion. |
@@ -375,9 +375,9 @@ sound's gain. The old voice bus had nothing routed to it and is gone.
 
 **Music and ambience.** During a round: a seeded arpeggio over a five-note scale, one 0.4 s
 sine note every 620 ms with a 40 % chance of an added fifth (seeded from the level seed), over a
-looped 2 s filtered-noise bed (320 Hz low-pass). Both are rendered once into clips; they stop when
-the round ends or is left, and hold while the window is hidden. Clips load one at a time once the
-mixer runs (in browsers after the first press); a clip still loading is silent.
+looped 2 s filtered-noise bed (320 Hz low-pass). Both are rendered once into clips (`OfflineAudioContext`); they stop when
+the round ends or is left, and hold while the window is hidden. Clips load at start; the bed and music
+start once the mixer runs (in browsers after the first press); a clip still loading is silent.
 
 **SFX table** (source for `sfx/manifest.txt`):
 
@@ -405,10 +405,10 @@ mixer runs (in browsers after the first press); a clip still loading is silent.
 **Languages:** en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT.
 
 The language is the runtime's interface language (`preferences().language`: the player's
-choice in Options › Language, else the account's preferred language or the device's), mapped to
-the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `fr → fr-FR`); a change applies on
+choice in Options › Language, else the account's preferred language or the device's), read through
+the engine's locale chain; a change applies on
 the next frame without restarting a round (every screen is rebuilt each frame). Code calls
-`T('<US-English text>', vars)`; catalogues in `js/locales/` are keyed by the US-English text
+`T('<US-English text>', vars)`; the tables in `assets/strings.json` are keyed by the US-English text
 (en-GB lists spelling changes, es-ES and fr-CA list their differences). Content stays English data
 — family and dish names, themes, lessons, challenges, achievements, rule refusals and hint
 sentences — and translates at display time; the rules match on `family` and `tier`, never on a

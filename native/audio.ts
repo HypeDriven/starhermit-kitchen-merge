@@ -9,12 +9,12 @@
 // ambience → "effects"; the old default bus levels (music 0.6, effects 0.8,
 // ambience 0.4) are folded into each sound's gain. The voice bus had nothing
 // routed to it and is not ported. The bed and the notes are rendered once into
-// clips (createClip) with the old filter and envelope; the synthesized
-// stand-ins the browser build played while a clip decoded are not ported (a
-// live synthesis graph makes clip loads fail on the engine's web runtime), so
-// a clip still loading is silent. Every clip starts loading at start-up (the
-// mixer takes them before it runs); the bed and the music still wait for it.
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
+// clips (OfflineAudioContext, one context a clip) with the old filter and
+// envelope; the synthesized stand-ins the browser build played while a clip
+// decoded are not ported, so a clip still loading is silent. Every clip starts
+// loading at start-up (the mixer takes them before it runs); the bed and the
+// music still wait for it.
+import { context, createClip, loadClip, OfflineAudioContext, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
 import { hashString, makeRng } from "../js/rules.js";
 
 const LEVEL = { music: 0.6, effects: 0.8, ambience: 0.4 };
@@ -33,6 +33,7 @@ export function loadSfx(): void {
   for (const name of new Set(Object.values(SAMPLES))) {
     loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
   }
+  renderMusic();
 }
 
 /** Plays a cue's sample (once loaded). */
@@ -46,38 +47,33 @@ export function cue(name: Cue): void {
 
 // -- the ambience bed and the music -----------------------------------------------------------
 const RATE = 22050;
-/** js/audio.js startAmbience: two seconds of seeded noise through a 320 Hz low-pass at 0.25, looped. */
-function ambienceClip(): AudioClip {
-  const n = RATE * 2;
-  const out = new Float32Array(n);
-  const rng = makeRng(hashString("ambience"));
-  // RBJ biquad low-pass, Q 1 (the Web Audio BiquadFilterNode default).
-  const w = (2 * Math.PI * 320) / RATE, alpha = Math.sin(w) / 2, cw = Math.cos(w);
-  const a0 = 1 + alpha, b0 = (1 - cw) / 2 / a0, b1 = (1 - cw) / a0, b2 = b0, a1 = (-2 * cw) / a0, a2 = (1 - alpha) / a0;
-  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-  for (let pass = 0; pass < 2; pass++) { // a first pass settles the filter so the loop has no click
-    for (let i = 0; i < n; i++) {
-      const x = rng() * 2 - 1;
-      const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
-      x2 = x1; x1 = x; y2 = y1; y1 = y;
-      if (pass) out[i] = y * 0.25;
-    }
-  }
-  const fade = 400;
-  for (let i = 0; i < fade; i++) out[i] = out[i]! * (i / fade) + out[n - fade + i]! * (1 - i / fade);
-  return createClip([out.subarray(0, n - fade)], RATE);
+/** js/audio.js startAmbience: two seconds of seeded noise through a 320 Hz low-pass at 0.25, looped.
+ * Q 0 dB: the old RBJ filter's linear Q 1. Filtered periodic noise is periodic once settled: no crossfade. */
+async function ambienceClip(): Promise<AudioClip> {
+  const n = RATE * 2, settle = Math.round(0.25 * RATE);
+  const off = new OfflineAudioContext(1, settle + n, RATE);
+  const noise = off.createNoise({ seed: hashString("ambience"), seconds: 2 });
+  const lp = off.createBiquadFilter();
+  lp.type = "lowpass"; lp.frequency.value = 320; lp.Q.value = 0;
+  const g = off.createGain();
+  g.gain.value = 0.25;
+  noise.connect(lp).connect(g).connect(off.destination);
+  noise.start();
+  const r = await off.startRendering();
+  return createClip([r.getChannelData(0).slice(settle)], RATE);
 }
 /** js/audio.js blip: a sine, 8 ms attack, exponential decay to 0.001 over `dur`. */
-function noteClip(freq: number, dur: number): AudioClip {
-  const attack = 0.008;
-  const n = Math.round((dur + 0.02) * RATE);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const t = i / RATE;
-    const env = t < attack ? t / attack : Math.pow(0.001, Math.min(1, (t - attack) / Math.max(0.01, dur - attack)));
-    out[i] = Math.sin(2 * Math.PI * freq * t) * env;
-  }
-  return createClip([out], RATE);
+async function noteClip(freq: number, dur: number): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round((dur + 0.02) * RATE), RATE);
+  const osc = off.createOscillator();
+  osc.frequency.value = freq;
+  const env = off.createGain();
+  env.gain.setValueAtTime(0, 0);
+  env.gain.linearRampToValueAtTime(1, 0.008);
+  env.gain.exponentialRampToValueAtTime(0.001, dur);
+  osc.connect(env).connect(off.destination);
+  osc.start();
+  return createClip(await off.startRendering());
 }
 const SCALE = [261.6, 311.1, 392, 466.2, 523.3];
 const notes = new Map<number, AudioClip>(); // 0..4 the scale (0.4 s), 5..9 its fifths (0.3 s)
@@ -86,7 +82,15 @@ let bed: AudioClip | null = null;
 let bedSound: Sound | null = null;
 let roundOn = false;
 let nextStep = 0;
-let nextRender = 0;
+
+/** The bed and the notes (0..4 the scale, 5..9 its fifths), from onStart. */
+function renderMusic(): void {
+  const warn = (e: unknown): void => console.warn(`audio: ${String(e)}`);
+  ambienceClip().then((c) => { bed = c; }, warn);
+  for (let i = 0; i < SCALE.length * 2; i++) {
+    (i < SCALE.length ? noteClip(SCALE[i]!, 0.4) : noteClip(SCALE[i - SCALE.length]! * 1.5, 0.3)).then((c) => { notes.set(i, c); }, warn);
+  }
+}
 
 /** A round's ambience and music, the music seeded from the level seed (js/audio.js startMusic). */
 export function startRound(seed: number): void { roundOn = true; musicRng = makeRng(hashString("music:" + seed)); }
@@ -98,21 +102,10 @@ export function stopRound(): void {
 /** A hidden window: everything holds (the music skipped while the tab was hidden). */
 export function setSuspended(on: boolean): void { suspended = on; }
 
-/** Each frame once the mixer runs: the bed and the notes rendered one each 0.3 s, the bed,
- * then the music's steps by mixer time. */
+/** Each frame once the mixer runs: the bed, then the music's steps by mixer time. */
 export function update(): void {
   if (context.state !== "running") return;
   try {
-    if (context.currentTime >= nextRender) {
-      if (!bed) { bed = ambienceClip(); nextRender = context.currentTime + 0.3; return; }
-      for (let i = 0; i < SCALE.length * 2; i++) {
-        if (!notes.has(i)) {
-          notes.set(i, i < SCALE.length ? noteClip(SCALE[i]!, 0.4) : noteClip(SCALE[i - SCALE.length]! * 1.5, 0.3));
-          nextRender = context.currentTime + 0.3;
-          return;
-        }
-      }
-    }
     const want = roundOn && !suspended;
     if (want && bed && !bedSound) bedSound = playClip(bed, { bus: "effects", gain: LEVEL.ambience, loop: true });
     else if (!want && bedSound) { try { bedSound.stop(); } catch { /* gone */ } bedSound = null; }

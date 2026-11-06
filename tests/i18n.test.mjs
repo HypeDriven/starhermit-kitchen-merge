@@ -2,9 +2,13 @@
 // Keys are the US-English source strings (see tests/i18n-keys.mjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DICTS, LOCALES, T, setLocale } from '../js/i18n.js';
+import { readFileSync } from 'node:fs';
 import { ALL } from './i18n-keys.mjs';
 
+const DICTS = JSON.parse(readFileSync(new URL('../assets/strings.json', import.meta.url), 'utf8'));
+const LOCALES = Object.keys(DICTS);
+const PARENT = { 'en-GB': 'en-US', 'es-ES': 'es-419', 'fr-CA': 'fr-FR' };
+const T = (l, k) => { for (let c = l; c; c = PARENT[c]) if (Object.hasOwn(DICTS[c], k)) return DICTS[c][k]; return k; };
 const placeholders = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
 
 test('the key set is non-trivial', () => {
@@ -28,26 +32,12 @@ test('no locale carries keys that no longer exist', () => {
   }
 });
 
-test('account and leaderboard lines follow the game language', () => {
-  setLocale('de-DE');
-  assert.equal(T('Invite a friend'), 'Freund einladen');
-  setLocale('fr-CA');
-  assert.match(T('Posting score to the leaderboard…'), /pointage/);
-  setLocale('en-US');
-});
-
-test('T falls back to the key and fills placeholders; regional variants inherit', () => {
-  setLocale('de-DE');
-  assert.equal(T('Not a real key {x}', { x: 1 }), 'Not a real key 1');
-  assert.equal(T('Stage {n}', { n: 2 }), 'Etappe 2');
-  setLocale('fr-CA');
-  assert.equal(T('Score'), 'Pointage');
-  assert.equal(T('Merge'), 'Fusionner'); // inherited from fr-FR
-  setLocale('es-ES');
-  assert.equal(T('Settings'), 'Ajustes');
-  assert.equal(T('Merge'), 'Combinar');
-  setLocale('en-GB');
-  assert.equal(T('Color-vision palette'), 'Colour-vision palette');
-  setLocale('en-US');
-  assert.equal(T('Merge'), 'Merge');
+test('regional variants inherit', () => {
+  assert.equal(T('de-DE', 'Stage {n}'), 'Etappe {n}');
+  assert.equal(T('fr-CA', 'Score'), 'Pointage');
+  assert.equal(T('fr-CA', 'Merge'), 'Fusionner'); // inherited from fr-FR
+  assert.equal(T('es-ES', 'Settings'), 'Ajustes');
+  assert.equal(T('es-ES', 'Merge'), 'Combinar');
+  assert.equal(T('en-GB', 'Color-vision palette'), 'Colour-vision palette');
+  assert.equal(T('en-US', 'Merge'), 'Merge');
 });
