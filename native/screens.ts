@@ -359,7 +359,7 @@ function settingsScreen(L: Layout): void {
         ui.row("theme-row", () => {
           para(T("Theme"), Math.max(60, inner * 0.35));
           ui.spacer();
-          const next = ui.style({ width: Math.min(220, inner * 0.62) }).id("set-theme").select(T("Theme"), cur, THEMES.map((t) => T(t.name)));
+          const next = ui.id("set-theme").select(T("Theme"), cur, THEMES.map((t) => T(t.name)));
           if (next !== cur) { settings.theme = ids[next]!; saveSettings(); }
         }, { width: inner, align: "center", spacing: 10 });
       }),

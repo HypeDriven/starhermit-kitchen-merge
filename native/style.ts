@@ -39,7 +39,7 @@ export function initStyles(): void {
       text: { color: "$text" }, minHeight: 44,
       parts: { box: { background: "$panel-2", border: { width: 1, color: "#ffffff33" }, radius: 4 }, mark: { background: "$accent" } },
     },
-    select: { text: { color: "$text" }, background: "$panel-2", border: { width: 1, color: "#ffffff33" }, radius: 8, minHeight: 40 },
+    select: { text: { color: "$text" }, background: "$panel-2", border: { width: 1, color: "#ffffff33" }, radius: 8 },
     dialog: {
       background: "$panel", radius: 14, padding: 22, border: { width: 1, color: "#00000055" },
       parts: { backdrop: { background: "#000000aa" } },
