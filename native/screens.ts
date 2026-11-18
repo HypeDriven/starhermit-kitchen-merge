@@ -1,3 +1,4 @@
+import { bindings } from "starhermit:input";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 import { localizedDrawOptions as __l10nDrawOptions } from "./l10n/font.ts";
 // localization-runtime:attached
@@ -112,7 +113,7 @@ function heading(cls: string, text: string, width: number, id?: string): void {
 const keyName = (action: string): string => bindingLabel(action, "keyboard") || "—";
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   const f = frame();
   const P = ink(pr().highContrast);
@@ -720,6 +721,7 @@ function overlays(L: Layout): void {
     });
   }
 }
+
 // ------------------------------------------------------------------ toast
 function toast(L: Layout): void {
   const t = app.toast;
@@ -753,4 +755,11 @@ function toast(L: Layout): void {
     if (textWidth(t.text, "toast") + 36 <= w) ui.style(__l10nStyle("toast")).id("toast").label(t.text);
     else ui.style(__l10nStyle("toast")).id("toast").paragraph(t.text, w - 36);
   });
+}
+
+export function drawScreens(): void {
+  if (app.screen !== "help") { drawScreensImmediate(); return; }
+  const actions = ["serve","discard","undo","hint","camera","pause","deselect"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
