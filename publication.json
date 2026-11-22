@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:01:03.972055+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-18T17:51:45.034676+00:00",
+    "coverArtUpdatedAt": "2026-11-22T14:20:04.787525+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-18T17:51:45.024719+00:00",
+      "deployedAt": "2026-11-22T14:20:04.775142+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.44.1",
+      "engineVersion": "1.47.0",
       "deployWarning": null
     },
     "description": "Grow and merge ingredients into finished dishes, then serve orders before their timers expire.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-18T17:51:45.007Z",
-  "sourceCommit": "dab240f9b1a28290cebe6fd689735f8fbf7293e2",
-  "bytesReceived": 2781979,
-  "archiveSha256": "d8e11a5c4bee2cbc710d00310bdb0760d6abfb438bf4929ded2fee59e3f3bde3",
+  "publishedAt": "2026-11-22T14:20:05.223Z",
+  "sourceCommit": "7e3d4d91a711f45c158636fe612ea815ee3523d1",
+  "bytesReceived": 2782164,
+  "archiveSha256": "9f1c621b69fd5dd13bf0770e3e18fc24ce39ff2d3d7777ebd2f278d0767a45a2",
   "indexSha256": "0449d96d933e7ea0fb67d29d297d2d04feb4ad115484ef9253aacdc4ec6b24c9",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2781979,
+    "bytesReceived": 2782164,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.44.1",
+    "engineVersion": "1.47.0",
     "deployWarning": null
   },
   "liveVerification": {
