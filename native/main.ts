@@ -20,8 +20,8 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Time is the runtime's fixed steps (60 a second): the session's 100 ms tick,
 // the lesson's 0.8 s hand-over and the hint's 3 s run on them, so play scripts
 // replay exactly.
-import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate } from "starhermit:engine";
-import { onAction, onPointerButton, onPointerMove, onTouch, vibrate } from "starhermit:input";
+import { frame, levelSettings, onFixedUpdate, onPreferencesChange, onQuit, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setFixedRate, setTargetFps } from "starhermit:engine";
+import { onAction, onPointerButton, onPointerMove, onTouch, primaryPointer, vibrate } from "starhermit:input";
 import * as ui from "starhermit:ui";
 import { requestSignIn } from "starhermit:platform";
 import { clipboard } from "starhermit:engine";
@@ -664,9 +664,21 @@ onFixedUpdate(() => {
 });
 
 let frameDt = 0;
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on the title (the
+ * kitchen draws only on the play screen) and on phone levels (levelIndex <= 3) under a finger,
+ * where steady 33 ms frames beat 33/50 ms jitter; none otherwise. The engine sets it aside while
+ * its menus are open, and the player's frame-rate limit still applies. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = app.screen === "title" || (frame().levelIndex <= 3 && primaryPointer() === "coarse") ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
 onUpdate((dt) => {
   frameDt = dt;
   applyLook();
+  capFrames();
   audio.update();
   applyContrast(ui.preferences().highContrast);
   if (app.toast && app.toast.until < now()) app.toast = null;

@@ -243,6 +243,7 @@ function applyTheme(id: string): void {
   floor = new Mesh(new CylinderGeometry(6.5, 7, 0.3, seg(48, b.segments, 16)), mat({ color: t.floor, roughness: 0.9 }));
   floor.position.y = -0.55;
   floor.receiveShadow = true;
+  floor.movable = false; // still scenery (host API 1.49): cached in shadow maps, skipped by the sync
   scene.add(floor);
   buildSurround();
   for (const m of cellMeshes) (m.material as MeshStandardMaterial).color.set(t.board);
@@ -284,6 +285,7 @@ function buildSurround(): void {
     cellar.castShadow = true;
     g.add(cellar);
   }
+  g.movable = false; // the counter and surround never move (a theme or look change rebuilds them)
   scene.add(g);
   envGroup = g;
 }
@@ -316,6 +318,7 @@ function buildBoard(c: number, r: number): void {
     boardGroup.add(m);
     cellMeshes.push(m);
   }
+  boardGroup.movable = false; // the slab and tiles never move (a new grid rebuilds them)
   scene.add(boardGroup);
   clearViews();
   fitShadow();
@@ -365,6 +368,7 @@ function makeGenerator(i: number, family: string): void {
     d ? mat({ color: 0x8a6a4a, roughness: 0.6, map: tex().wood }) : mat({ color: 0x5a4632, roughness: 0.7 }));
   base.castShadow = true;
   base.receiveShadow = true;
+  base.movable = false; // the station's base stays put; its item turns and bobs
   const top = new Mesh(familyGeometry(family, 1, k), itemMaterial(c, { emissive: c, emissiveIntensity: 0.3 }));
   top.position.y = 0.35;
   top.castShadow = true;
