@@ -16,7 +16,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 | Genre | Single-player merge/service puzzle with real-time order timers |
 | Players | 1, plus asynchronous comparison (local records; the StarHermit `high-score` board when signed in) |
 | Session length | 90 s (a Challenge) to ~5 min (Daily); Journey stages run 3–4.5 min |
-| Platforms | StarHermit engine 1.51.0 script game (host API 1.51, `engine.minor=51`): natively in the StarHermit client, in desktop and mobile browsers through the engine's web runtime; portrait and landscape |
+| Platforms | StarHermit engine 1.53.0 script game (host API 1.53, `engine.minor=53`): natively in the StarHermit client, in desktop and mobile browsers through the engine's web runtime; portrait and landscape |
 | Rendering | The kitchen on `starhermit:scene` behind a grid of labelled cell widgets (`starhermit:ui`) that is the single interaction and accessibility surface |
 | Simulation | Fixed 100 ms tick on the runtime's 60 Hz fixed steps, seeded PRNG, serializable state, replayable command log |
 
@@ -24,7 +24,7 @@ up a five-tier chain, and serve the finished dish to a ticket before its timer b
 
 | Path | Responsibility |
 |---|---|
-| `starhermit.txt` | Manifest: name, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.entry=native/main.ts`, `engine.version=1.51.0`, `engine.minor=51`, capabilities (platform, storage, clipboard), `control.*` and `engine.gamepad.*` defaults. |
+| `starhermit.txt` | Manifest: name, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.entry=native/main.ts`, `engine.version=1.53.0`, `engine.minor=53`, capabilities (platform, storage, clipboard), `control.*` and `engine.gamepad.*` defaults. |
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (`starhermit package --web .`); never edited by hand. |
 | `native/main.ts` | Entry module: screen flow, rounds on the fixed steps, the selection model, drags, rule events → sound/announcements/effects, lessons, progression, achievements, results, leaderboard posting, lifecycle. |
 | `native/screens.ts` | Every screen and dialog as `starhermit:ui`: title, list picker, setup, play (HUD, Orders and Actions rails, the cell grid), pause and results dialogs, How to Play, Settings, Scores, toast. |
@@ -575,16 +575,18 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.51.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.51.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.51 `setTargetFps`).** The title (the kitchen draws only on the play screen) and, under a finger (`primaryPointer() === "coarse"`), the phone graphics levels (`levelIndex` ≤ 3) cap the game at 30 frames a second, where steady 33 ms frames replace uneven ones; elsewhere there is no game cap. The rules tick on the fixed update, so play is unchanged. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.53 `setTargetFps`).** The title (the kitchen draws only on the play screen) and, under a finger (`primaryPointer() === "coarse"`), the phone graphics levels (`levelIndex` ≤ 3) cap the game at 30 frames a second, where steady 33 ms frames replace uneven ones; elsewhere there is no game cap. The rules tick on the fixed update, so play is unchanged. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery (host API 1.51).** The floor disc, the counter and its surround (shelf, pans, window, rail, salt cellar), the board's grout slab and tiles, and each station's wooden base are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms; a theme, look or grid change builds new meshes. The items, the stations' turning items, the rings, sparks and motes stay movable.
+**Still scenery (host API 1.53).** The floor disc, the counter and its surround (shelf, pans, window, rail, salt cellar), the board's grout slab and tiles, and each station's wooden base are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms; a theme, look or grid change builds new meshes. The items, the stations' turning items, the rings, sparks and motes stay movable.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
